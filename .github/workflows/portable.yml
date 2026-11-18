@@ -42,7 +42,7 @@ jobs:
             libgl1-mesa-dev
       - name: Build and package
         shell: bash
-        run: ./packaging/build-portable.sh
+        run: bash ./packaging/build-portable.sh
       - uses: actions/upload-artifact@v4
         with:
           name: craftpull-linux-x86_64
