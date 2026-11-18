@@ -28,8 +28,14 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libxkbcommon-dev libwayland-dev libx11-dev \
-            libxrandr-dev libxi-dev libgl1-mesa-dev
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config libssl-dev libfontconfig1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            libxdo-dev \
+            libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev \
+            libx11-dev libxrandr-dev libxi-dev libxcursor-dev \
+            libgl1-mesa-dev
       - name: Build and package
         shell: pwsh
         run: ${{ matrix.package }}
