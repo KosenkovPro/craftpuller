@@ -7,29 +7,29 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
-    name: Build portable packages
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: windows-latest
-            target: windows-x64
-            shell: pwsh
-            package: ./packaging/build-portable.ps1
-            glob: dist/*.zip
-          - os: ubuntu-latest
-            target: linux-x86_64
-            shell: bash
-            package: ./packaging/build-portable.sh
-            glob: dist/*.tar.gz
+  windows:
+    name: Windows x64 (portable zip)
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Install system libraries (Linux)
-        if: matrix.os == 'ubuntu-latest'
+      - name: Build and package
+        shell: pwsh
+        run: ./packaging/build-portable.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: craftpull-windows-x64
+          path: dist/*.zip
+
+  ubuntu:
+    name: Linux x86_64 (portable tar.gz)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install system libraries
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
@@ -41,16 +41,16 @@ jobs:
             libx11-dev libxrandr-dev libxi-dev libxcursor-dev \
             libgl1-mesa-dev
       - name: Build and package
-        shell: ${{ matrix.shell }}
-        run: ${{ matrix.package }}
+        shell: bash
+        run: ./packaging/build-portable.sh
       - uses: actions/upload-artifact@v4
         with:
-          name: craftpull-${{ matrix.target }}
-          path: ${{ matrix.glob }}
+          name: craftpull-linux-x86_64
+          path: dist/*.tar.gz
 
   release:
     name: Publish GitHub release
-    needs: build
+    needs: [windows, ubuntu]
     runs-on: ubuntu-latest
     permissions:
       contents: write
