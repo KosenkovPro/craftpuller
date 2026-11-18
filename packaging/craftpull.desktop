@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=CraftPull
+GenericName=Release manager
+Comment=Download and update releases and sources of GitHub repositories
+Exec=craftpull
+Icon=craftpull
+Terminal=false
+Categories=Utility;Network;FileTransfer;
+StartupNotify=true
