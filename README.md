@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="craftpull-icon.png" width="96" height="96" alt="CraftPull logo">
+  <img src=".github/assets/banner.png" alt="CraftPull — release & source manager for GitHub" width="100%">
 
   <h1>CraftPull</h1>
 
@@ -21,6 +21,21 @@
 </div>
 
 ---
+
+## What it does
+
+CraftPull is a **desktop release manager for GitHub**. Point it at your repositories, and it
+watches them for new releases, downloads the release assets (Windows `zip`, Ubuntu `tar.gz`,
+`.AppImage`, `.msi`, `.deb` or source archives), verifies their SHA-256 checksums and removes the
+outdated versions — leaving the ones you pinned alone.
+
+It is a **native Rust application** built with **egui/eframe**: no Electron, no bundled browser,
+no web engine. It runs in the system tray, and it keeps working even when the anonymous GitHub
+API quota is exhausted.
+
+**Keywords:** `github release manager`, `github downloader`, `release asset downloader`,
+`auto update tool`, `rust desktop app`, `egui`, `windows`, `ubuntu`, `linux`,
+`sha256`, `version manager`.
 
 ## Screenshots
 
@@ -167,6 +182,20 @@ shown in the **About** section of the settings.
 * **To run a ready build:** Windows 10/11 or Ubuntu 22.04+
 * **To build from source:** Rust 1.82 or newer
 * **For self-update:** `cargo` must be available in `PATH`
+
+---
+
+## Downloads
+
+Ready-made packages are published on the **[Releases page](https://github.com/KosenkovPro/craftpuller/releases)**:
+
+| Platform | Package |
+|---|---|
+| Windows x64 | `craftpull-*-windows-x64.zip` — portable, no installer needed |
+| Linux x86_64 | `craftpull-*-linux-x86_64.tar.gz` — with `install.sh` and a `.desktop` entry |
+
+Unpack the Windows archive and run `craftpull.exe`. The Linux archive contains `install.sh`,
+which puts the binary into `~/.local/bin` and registers the desktop entry and the icon.
 
 ---
 
