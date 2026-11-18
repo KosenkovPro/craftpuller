@@ -16,10 +16,14 @@ jobs:
         include:
           - os: windows-latest
             target: windows-x64
+            shell: pwsh
             package: ./packaging/build-portable.ps1
+            glob: dist/*.zip
           - os: ubuntu-latest
             target: linux-x86_64
+            shell: bash
             package: ./packaging/build-portable.sh
+            glob: dist/*.tar.gz
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -37,14 +41,12 @@ jobs:
             libx11-dev libxrandr-dev libxi-dev libxcursor-dev \
             libgl1-mesa-dev
       - name: Build and package
-        shell: pwsh
+        shell: ${{ matrix.shell }}
         run: ${{ matrix.package }}
       - uses: actions/upload-artifact@v4
         with:
           name: craftpull-${{ matrix.target }}
-          path: |
-            dist/*.zip
-            dist/*.tar.gz
+          path: ${{ matrix.glob }}
 
   release:
     name: Publish GitHub release
