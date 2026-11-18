@@ -1,0 +1,940 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CraftPull — макет интерфейса к согласованию</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Outfit:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#f7f5f0;
+  --card:#ffffff;
+  --line:#e9e3d6;
+  --line-soft:#f1ede3;
+  --ink:#14171e;
+  --ink-2:#3a4256;
+  --muted:#7c7a72;
+  --accent:#2f6f5e;
+  --accent-soft:rgba(47,111,94,.08);
+
+  --app-bg:#0E1116;
+  --app-panel:#141922;
+  --app-card:#181E28;
+  --app-card-2:#1B222E;
+  --app-border:#262F3D;
+  --app-text:#E6EDF3;
+  --app-dim:#8B98A9;
+  --app-blue:#4C8DFF;
+  --app-green:#34D399;
+  --app-warn:#FBBF24;
+  --app-purple:#C084FC;
+  --app-red:#F87171;
+  --mono:'JetBrains Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;background:var(--paper);color:var(--ink);
+  font-family:'Outfit',sans-serif;font-size:15px;line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1180px;margin:0 auto;padding:0 28px}
+header.top{padding:64px 0 36px;border-bottom:1px solid var(--line);margin-bottom:44px}
+h1{font-family:'DM Serif Display',serif;font-weight:400;font-size:44px;line-height:1.1;margin:0 0 10px;letter-spacing:-.01em}
+h1 em{font-style:normal;color:var(--accent)}
+.lede{font-size:17px;color:var(--ink-2);max-width:760px;margin:0 0 22px}
+.meta{display:flex;flex-wrap:wrap;gap:8px}
+.chip{font:500 12px/1 'Outfit',sans-serif;letter-spacing:.02em;padding:7px 12px;border-radius:999px;background:#fff;border:1px solid var(--line);color:var(--ink-2)}
+.chip.accent{background:var(--accent-soft);border-color:rgba(47,111,94,.3);color:var(--accent)}
+
+h2{font-family:'DM Serif Display',serif;font-weight:400;font-size:30px;margin:0 0 6px;letter-spacing:-.005em}
+h3{font-size:16px;font-weight:600;margin:0 0 4px}
+section{margin-bottom:64px}
+.lead{color:var(--muted);margin:0 0 22px;max-width:820px}
+.num{font:700 12px/1 var(--mono);color:var(--accent);display:block;margin-bottom:8px}
+
+/* ---------- требования ---------- */
+.reqs{display:grid;grid-template-columns:repeat(2,1fr);gap:0 40px;border-top:1px solid var(--line)}
+.req{display:grid;grid-template-columns:34px 1fr;gap:14px;padding:16px 0;border-bottom:1px solid var(--line-soft)}
+.req .n{font:700 13px/1.5 var(--mono);color:var(--accent)}
+.req p{margin:0;color:var(--ink-2);font-size:14px}
+.req p b{color:var(--ink);font-weight:600}
+
+/* ---------- окно приложения ---------- */
+.shot{background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 4px 20px -6px rgba(20,23,30,.10)}
+.shot-cap{display:flex;align-items:baseline;gap:14px;padding:14px 20px;border-bottom:1px solid var(--line-soft);background:#fdfcfa}
+.shot-cap b{font-size:14px;font-weight:600}
+.shot-cap span{font-size:12.5px;color:var(--muted)}
+.shot-cap .tag{margin-left:auto;font:500 11px/1 'Outfit';padding:5px 10px;border-radius:6px;background:var(--accent-soft);color:var(--accent)}
+
+.app{background:var(--app-bg);color:var(--app-text);font-size:12.5px;display:flex;flex-direction:column;min-height:520px}
+.titlebar{height:30px;background:#1a1e26;display:flex;align-items:center;padding:0 12px;gap:8px;border-bottom:1px solid #0a0d11}
+.titlebar .ti{width:14px;height:14px;border-radius:4px;background:var(--app-blue);display:grid;place-items:center}
+.titlebar .ti svg{width:9px;height:9px;color:#fff}
+.titlebar span{font:500 11.5px/1 'Outfit';color:#c6ced9}
+.titlebar .sp{flex:1}
+.wbtn{width:26px;height:14px;display:grid;place-items:center;color:#9aa6b5}
+.wbtn svg{width:11px;height:11px}
+
+.appbar{display:flex;align-items:center;gap:10px;padding:10px 16px;background:var(--app-panel);border-bottom:1px solid var(--app-border)}
+.appbar .ai{width:24px;height:24px;border-radius:6px;background:var(--app-blue);display:grid;place-items:center;flex:none}
+.appbar .ai svg{width:13px;height:13px;color:#fff}
+.appbar .brand{font-size:20px;font-weight:600;letter-spacing:-.01em}
+.appbar .sub{font-size:11.5px;color:var(--app-dim)}
+.pill{font-size:11.5px;padding:4px 10px;border-radius:999px;border:1px solid var(--app-border);color:var(--app-dim);background:var(--app-card)}
+.pill.ok{color:var(--app-green);border-color:rgba(52,211,153,.35);background:rgba(52,211,153,.10)}
+.pill.busy{color:var(--app-blue);border-color:rgba(76,141,255,.4);background:rgba(76,141,255,.12)}
+.btn{font-size:11.5px;padding:6px 11px;border-radius:7px;border:1px solid var(--app-border);background:var(--app-card-2);color:var(--app-text);white-space:nowrap}
+.btn.pri{background:rgba(76,141,255,.16);border-color:rgba(76,141,255,.45);color:#9dc0ff}
+.btn.on{background:rgba(76,141,255,.22);border-color:var(--app-blue);color:#bcd4ff}
+.btn.sm{font-size:10.5px;padding:4px 9px}
+.spacer{flex:1}
+
+.body{display:flex;flex:1;min-height:0}
+.side{width:196px;flex:none;background:var(--app-panel);border-right:1px solid var(--app-border);padding:12px;display:flex;flex-direction:column;gap:6px}
+.side .nav{width:100%;text-align:left;font-size:13px;padding:9px 12px;border-radius:8px;border:1px solid transparent;background:transparent;color:var(--app-text)}
+.side .nav.on{background:var(--app-card-2);border-color:var(--app-border);color:#fff}
+.side .foot{margin-top:auto;color:var(--app-dim);font-size:11px;line-height:1.7}
+.main{flex:1;padding:16px 18px;min-width:0;overflow:hidden}
+.main h4{font-size:19px;font-weight:600;margin:0 0 2px}
+.count{color:var(--app-dim);font-size:11.5px}
+.row{display:flex;align-items:center;gap:8px;margin:10px 0}
+.label{color:var(--app-dim);font-size:11.5px}
+.field{background:var(--app-card);border:1px solid var(--app-border);border-radius:7px;padding:6px 10px;color:#8d99a8;font-size:11.5px;min-width:250px}
+.group{color:var(--app-blue);font-size:12.5px;font-weight:600;margin:14px 0 8px}
+
+/* ---------- карточки ---------- */
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.card{background:var(--app-card);border:1px solid var(--app-border);border-radius:12px;padding:12px}
+.card .ic{width:40px;height:40px;border-radius:9px;display:grid;place-items:center;font:600 15px/1 'Outfit';color:#fff}
+.card .nm{font-size:13px;font-weight:600;margin-top:8px}
+.card .vr{font:500 11px/1 var(--mono);color:var(--app-green);margin-top:3px}
+.card.sel{border-color:rgba(76,141,255,.5)}
+
+.chipset{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
+.cchip{font-size:10px;padding:3px 7px;border-radius:5px;border:1px solid var(--app-border);color:var(--app-dim)}
+.cchip.ok{color:var(--app-green);border-color:rgba(52,211,153,.3)}
+.cchip.pu{color:var(--app-purple);border-color:rgba(192,132,252,.3)}
+
+/* ---------- прогресс ---------- */
+.pbar{position:relative;height:17px;border-radius:9px;background:#202834;overflow:hidden;flex:1}
+.pbar .fill{position:absolute;left:0;top:0;bottom:0;background:var(--app-blue)}
+.pbar .fill.ok{background:var(--app-green)}
+.pbar .pct{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:700 10px/1 var(--mono);color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.5)}
+.pbar.sm{height:13px;border-radius:7px}
+.pbar.sm .pct{font-size:8.5px}
+
+.legend{display:flex;flex-direction:column;gap:9px}
+.trow{background:var(--app-card);border:1px solid var(--app-border);border-radius:10px;padding:9px 12px}
+.trow .top{display:flex;align-items:center;gap:9px;margin-bottom:7px}
+.qnum{font:700 10px/1 var(--mono);color:var(--app-dim);background:#202834;border:1px solid var(--app-border);border-radius:5px;padding:4px 6px;flex:none}
+.fname{font:500 11px/1.3 var(--mono);color:var(--app-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
+.st{font-size:10px;padding:3px 7px;border-radius:5px;flex:none}
+.st.run{color:var(--app-green);background:rgba(52,211,153,.12)}
+.st.q{color:var(--app-dim);background:#202834}
+.st.done{color:var(--app-blue);background:rgba(76,141,255,.12)}
+.spd{font:500 11px/1 var(--mono);color:var(--app-green);flex:none}
+.tmeta{display:flex;flex-wrap:wrap;gap:14px;margin-top:7px;color:var(--app-dim);font-size:10.5px}
+.tmeta b{color:var(--app-text);font-weight:500;font-family:var(--mono)}
+
+/* ---------- список / лёгкий режим ---------- */
+.lrow{background:var(--app-card);border:1px solid var(--app-border);border-radius:10px;padding:11px 13px;display:grid;grid-template-columns:46px 1fr 412px;gap:13px;align-items:start}
+.lrow .ic{width:44px;height:44px;border-radius:10px;display:grid;place-items:center;font:600 15px/1 'Outfit';color:#fff}
+.lrow h5{margin:0;font-size:14.5px;font-weight:600}
+.lrow .slug{font:400 10.5px/1.4 var(--mono);color:var(--app-dim);margin-top:2px}
+.lrow .desc{color:#b8c2cf;font-size:11.5px;margin-top:6px;line-height:1.5}
+.lrow .acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
+.prow{background:var(--app-card-2);border:1px solid var(--app-border);border-radius:8px;padding:8px 10px}
+
+.lite{background:var(--app-card);border:1px solid var(--app-border);border-radius:8px;padding:9px 12px;display:grid;grid-template-columns:112px 1fr 412px;gap:12px;align-items:center}
+.lite .n{font-size:13px;font-weight:600}
+.lite .d{font-size:11px;color:var(--app-dim);margin-top:2px}
+.lite .k{font:400 10.5px/1.5 var(--mono);color:var(--app-dim)}
+
+/* ---------- выпадающие списки ---------- */
+.combo{position:relative;background:var(--app-card);border:1px solid var(--app-border);border-radius:8px;padding:8px 11px;display:flex;align-items:center;gap:9px;font-size:12.5px;min-width:280px}
+.combo .caret{margin-left:auto;color:var(--app-dim);display:grid;place-items:center}
+.combo .caret svg{width:13px;height:13px}
+.menu{margin-top:6px;background:var(--app-card-2);border:1px solid var(--app-border);border-radius:9px;overflow:hidden;box-shadow:0 10px 26px -8px rgba(0,0,0,.6)}
+.mitem{display:flex;align-items:center;gap:9px;padding:8px 12px;font-size:12px;border-bottom:1px solid rgba(38,47,61,.6)}
+.mitem:last-child{border-bottom:0}
+.mitem .os{font:500 10px/1 var(--mono);color:var(--app-dim);background:#202834;border:1px solid var(--app-border);border-radius:4px;padding:4px 6px;flex:none}
+.mitem.on{background:rgba(76,141,255,.13);color:#cfe0ff}
+.mitem.on .os{color:#9dc0ff;border-color:rgba(76,141,255,.5)}
+.auto{margin-left:auto;font-size:10px;color:var(--app-green);flex:none}
+.sz{font:500 10.5px/1 var(--mono);color:var(--app-dim);margin-left:auto}
+
+/* ---------- проверки ---------- */
+.checklist{display:flex;flex-direction:column;gap:7px}
+.citem{display:grid;grid-template-columns:18px 1fr auto;gap:10px;align-items:center;background:var(--app-card);border:1px solid var(--app-border);border-radius:8px;padding:8px 11px;font-size:12px}
+.citem .ic{display:grid;place-items:center;width:16px;height:16px;border-radius:50%;font-size:9px}
+.citem .ic.ok{background:rgba(52,211,153,.16);color:var(--app-green)}
+.citem .ic.run{background:rgba(76,141,255,.16);color:var(--app-blue)}
+.citem .ic.wait{background:#202834;color:var(--app-dim)}
+.citem .res{font:400 10.5px/1 var(--mono);color:var(--app-dim)}
+
+/* ---------- релизы внутри страницы ---------- */
+.sheet{background:var(--app-card);border:1px solid rgba(76,141,255,.4);border-radius:12px;overflow:hidden}
+.sheet .hd{display:flex;align-items:center;gap:11px;padding:12px 14px;border-bottom:1px solid var(--app-border)}
+.sheet .hd .ic{width:44px;height:44px;border-radius:10px;display:grid;place-items:center;font:600 16px/1 'Outfit';color:#fff}
+.sheet .hd h5{margin:0;font-size:15px;font-weight:600}
+.sheet .hd .slug{font:400 10.5px/1.4 var(--mono);color:var(--app-dim)}
+.rel{display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--app-border);font-size:12px}
+.rel .caret{color:var(--app-dim);display:grid;place-items:center}
+.rel .caret svg{width:12px;height:12px}
+.rel .tag{font-weight:600}
+.rel .when{color:var(--app-dim);font-size:10.5px;margin-left:auto;font-family:var(--mono)}
+.files{padding:4px 14px 10px 38px;background:#141922}
+.file{display:flex;align-items:center;gap:9px;padding:5px 0;font:400 11.5px/1.4 var(--mono);color:#cbd5e1}
+.cbx{width:13px;height:13px;border-radius:3px;border:1px solid var(--app-border);background:var(--app-card-2);flex:none;display:grid;place-items:center}
+.cbx.on{background:var(--app-blue);border-color:var(--app-blue)}
+.cbx svg{width:9px;height:9px;color:#fff}
+.sticky{display:flex;align-items:center;gap:12px;padding:11px 14px;background:#11151d;border-top:1px solid var(--app-border)}
+.sticky .sum{font-size:11.5px;color:var(--app-dim)}
+.sticky .sum b{color:var(--app-text);font-weight:600}
+
+/* ---------- настройки ---------- */
+.cardset{background:var(--app-card);border:1px solid var(--app-border);border-radius:11px;padding:13px 15px}
+.cardset h4{margin:0 0 9px;font-size:13.5px;font-weight:600}
+.slider{position:relative;height:6px;background:#202834;border-radius:4px;width:250px}
+.slider .sf{position:absolute;left:0;top:0;bottom:0;background:var(--app-blue);border-radius:4px}
+.slider .kn{position:absolute;top:50%;width:13px;height:13px;border-radius:50%;background:#fff;transform:translate(-50%,-50%);box-shadow:0 1px 4px rgba(0,0,0,.5)}
+.numbox{font:600 12px/1 var(--mono);background:var(--app-card-2);border:1px solid var(--app-border);border-radius:6px;padding:7px 11px;min-width:46px;text-align:center}
+.checks{display:flex;flex-direction:column;gap:6px}
+.chk{display:flex;align-items:center;gap:9px;font-size:12px}
+.cbox{width:14px;height:14px;border-radius:4px;border:1px solid var(--app-border);background:var(--app-card-2);display:grid;place-items:center;flex:none}
+.cbox.on{background:var(--app-blue);border-color:var(--app-blue)}
+.cbox svg{width:9px;height:9px;color:#fff}
+
+/* ---------- план ---------- */
+.plan{counter-reset:p;display:grid;grid-template-columns:repeat(2,1fr);gap:0 40px}
+.step{display:grid;grid-template-columns:30px 1fr;gap:13px;padding:15px 0;border-top:1px solid var(--line-soft)}
+.step .k{font:700 12px/1.7 var(--mono);color:var(--accent)}
+.step p{margin:0;font-size:14px;color:var(--ink-2)}
+.step p b{color:var(--ink);font-weight:600}
+.flag{display:inline-block;font:600 10px/1 'Outfit';padding:4px 8px;border-radius:5px;background:rgba(248,113,113,.12);color:#c2410c;margin-left:6px;vertical-align:1px}
+
+footer{border-top:1px solid var(--line);padding:30px 0 60px;color:var(--muted);font-size:13px;display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
+
+@media(max-width:1000px){
+  .grid{grid-template-columns:repeat(2,1fr)}
+  .lrow,.lite{grid-template-columns:1fr}
+  .reqs,.plan{grid-template-columns:1fr}
+}
+@media(max-width:640px){
+  .wrap{padding:0 16px}
+  h1{font-size:32px}
+  .grid{grid-template-columns:1fr}
+  .appbar{flex-wrap:wrap}
+  .side{width:150px}
+}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <h1>CraftPull — <em>макет интерфейса</em> к согласованию</h1>
+    <p class="lede">Восемь изменений в одном экране: подробный прогресс загрузок, выбор файла под текущую ОС,
+      список проверок по кнопке «Проверить», релизы внутри страницы, целочисленный лимит параллельных
+      загрузок и выключенные по умолчанию нестабильные релизы. Ниже — как это будет выглядеть.</p>
+    <div class="meta">
+      <span class="chip accent">v0.1.0 → v0.2.0</span>
+      <span class="chip">язык макета: русский</span>
+      <span class="chip">тёмная тема, egui 0.31</span>
+      <span class="chip">18 ноября 2026</span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+<section>
+  <h2>Что меняем</h2>
+  <p class="lead">Каждый пункт ниже — отдельный экран макета или отдельная правка.</p>
+  <div class="reqs">
+    <div class="req"><span class="n">01</span><p><b>Прогресс в легенде.</b> Номер файла в очереди, имя файла, скорость, прошедшее время, оценка остатка и процент по центру полосы.</p></div>
+    <div class="req"><span class="n">02</span><p><b>Прогресс в карточке сетки.</b> Только полоса и процент — без лишних строк, чтобы плитка оставалась компактной.</p></div>
+    <div class="req"><span class="n">03</span><p><b>Режимы «Список» и «Без картинок».</b> Разворачиваем до полной подробности — как в легенде, но в строку репозитория.</p></div>
+    <div class="req"><span class="n">04</span><p><b>Наложение русского текста.</b> В абсолютной вёрстке длинные русские строки заезжают друг на друга — переходим на расчёт ширины и перенос.</p></div>
+    <div class="req"><span class="n">05</span><p><b>Выбор файла.</b> Выпадающий список из реальных файлов релиза: «Windows Portable», «Windows MSI», «Ubuntu AppImage» и другие. По умолчанию — под текущую ОС.</p></div>
+    <div class="req"><span class="n">06</span><p><b>Кнопка «Проверить».</b> Показывает список проверок: что уже проверено, что проверяется сейчас и что в очереди.</p></div>
+    <div class="req"><span class="n">07</span><p><b>Параллельные загрузки.</b> Лимит поднимаем до максимума, значение — только целое, без «3.0».</p></div>
+    <div class="req"><span class="n">08</span><p><b>Релизы внутри страницы.</b> Без отдельного окна: разворачивающийся список и всегда видимая кнопка «Скачать выбранное».</p></div>
+  </div>
+</section>
+
+<section>
+  <h2>Легенда загрузок</h2>
+  <p class="lead">Вкладка «Журнал»: у каждого файла — номер в очереди, имя, скорость, полоса с процентом
+    по центру, прошедшее время и оценка остатка.</p>
+  <div class="shot">
+    <div class="shot-cap"><b>Журнал → раздел «Загрузки»</b><span>полная детализация</span><span class="tag">экран 1</span></div>
+    <div class="app">
+      <div class="titlebar">
+        <div class="ti"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M19 12l-7 7-7-7"/></svg></div>
+        <span>CraftPull</span><div class="sp"></div>
+        <div class="wbtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/></svg></div>
+        <div class="wbtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="5" width="14" height="14" rx="1"/></svg></div>
+        <div class="wbtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></div>
+      </div>
+      <div class="appbar">
+        <div class="ai"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M19 12l-7 7-7-7"/></svg></div>
+        <span class="brand">CraftPull</span><span class="sub">менеджер релизов</span>
+        <span class="pill busy">Загрузка · файлов: 3 · 13.7 МБ/с</span>
+        <div class="spacer"></div>
+        <span class="btn">Проверить</span><span class="btn">Скачать новое</span><span class="btn">Пауза</span><span class="btn">Стоп</span><span class="btn">EN</span>
+      </div>
+      <div class="body">
+        <div class="side">
+          <span class="nav">Репозитории</span><span class="nav">Настройки</span><span class="nav on">Журнал</span>
+          <div class="foot">работает в фоне · трей активен<br>v0.1.0<br>Косенков Иван</div>
+        </div>
+        <div class="main">
+          <div class="row" style="justify-content:space-between">
+            <div style="display:flex;align-items:baseline;gap:10px"><h4>Журнал</h4></div>
+            <div style="display:flex;gap:7px"><span class="btn sm">Открыть файл</span><span class="btn sm">Очистить</span></div>
+          </div>
+
+          <div class="group" style="margin-top:6px">Загрузки</div>
+          <div class="legend">
+            <div class="trow">
+              <div class="top">
+                <span class="qnum">#1</span>
+                <span class="fname">pdfcraft-0.21.1-windows-x64-portable.zip</span>
+                <span class="st run">Качается</span>
+                <span class="spd">13.7 МБ/с</span>
+              </div>
+              <div class="pbar"><div class="fill" style="width:62%"></div><span class="pct">62%</span></div>
+              <div class="tmeta">
+                <span>прошло <b>00:42</b></span>
+                <span>осталось <b>~00:26</b></span>
+                <span>скачано <b>66.2 МБ</b> из <b>106.8 МБ</b></span>
+                <span>очередь: <b>1 из 9</b></span>
+              </div>
+            </div>
+
+            <div class="trow">
+              <div class="top">
+                <span class="qnum">#2</span>
+                <span class="fname">wordcraft-0.18.1-linux-x86_64.AppImage</span>
+                <span class="st run">Качается</span>
+                <span class="spd">9.4 МБ/с</span>
+              </div>
+              <div class="pbar"><div class="fill" style="width:31%"></div><span class="pct">31%</span></div>
+              <div class="tmeta">
+                <span>прошло <b>00:18</b></span>
+                <span>осталось <b>~01:12</b></span>
+                <span>скачано <b>16.5 МБ</b> из <b>53.1 МБ</b></span>
+                <span>очередь: <b>2 из 9</b></span>
+              </div>
+            </div>
+
+            <div class="trow">
+              <div class="top">
+                <span class="qnum">#3</span>
+                <span class="fname">gridcraft-0.19.1-windows-x64.msi</span>
+                <span class="st q">В очереди</span>
+                <span class="spd" style="color:var(--app-dim)">—</span>
+              </div>
+              <div class="pbar"><div class="fill" style="width:0%"></div><span class="pct" style="color:var(--app-dim)">0%</span></div>
+              <div class="tmeta">
+                <span>прошло <b>—</b></span><span>осталось <b>—</b></span>
+                <span>размер <b>38.4 МБ</b></span><span>очередь: <b>3 из 9</b></span>
+              </div>
+            </div>
+
+            <div class="trow" style="opacity:.72">
+              <div class="top">
+                <span class="qnum">#4</span>
+                <span class="fname">pdfcraft-0.21.1-source.zip</span>
+                <span class="st done">Готово</span>
+                <span class="spd" style="color:var(--app-dim)">12.1 МБ/с</span>
+              </div>
+              <div class="pbar"><div class="fill ok" style="width:100%"></div><span class="pct">100%</span></div>
+              <div class="tmeta">
+                <span>прошло <b>00:04</b></span><span>осталось <b>—</b></span>
+                <span>скачано <b>4.8 МБ</b> из <b>4.8 МБ</b></span>
+              </div>
+            </div>
+          </div>
+
+          <div style="border-top:1px solid var(--app-border);margin:16px 0 10px"></div>
+          <div class="label" style="margin-bottom:6px">Журнал событий</div>
+          <div style="font-size:11px;color:var(--app-dim);line-height:1.85">
+            <div><span style="color:#5f6b7a;font-family:var(--mono)">02:27:15</span> CraftPull запущен. Папка загрузок: E:\Open\Src</div>
+            <div><span style="color:#5f6b7a;font-family:var(--mono)">02:27:20</span> storytold/pdfcraft: найдено релизов 10, последняя проверка выполнена</div>
+            <div><span style="color:#34D399;font-family:var(--mono)">02:27:23</span> storytold/gridcraft v0.19.1: gridcraft-0.19.1-linux-x86_64.AppImage — готово</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Сетка: прогресс внутри карточки</h2>
+  <p class="lead">В плитке остаётся только полоса с процентом — детали живут в легенде.
+    Наведение на карточку открывает полную строку прогресса.</p>
+  <div class="shot">
+    <div class="shot-cap"><b>Репозитории → сетка</b><span>в карточке только полоса и процент</span><span class="tag">экран 2</span></div>
+    <div class="app">
+      <div class="titlebar">
+        <div class="ti"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M19 12l-7 7-7-7"/></svg></div>
+        <span>CraftPull</span><div class="sp"></div>
+        <div class="wbtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/></svg></div>
+        <div class="wbtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="5" width="14" height="14" rx="1"/></svg></div>
+        <div class="wbtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></div>
+      </div>
+      <div class="appbar">
+        <div class="ai"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M19 12l-7 7-7-7"/></svg></div>
+        <span class="brand">CraftPull</span><span class="sub">менеджер релизов</span>
+        <span class="pill busy">Загрузка · файлов: 2 · 13.7 МБ/с</span>
+        <div class="spacer"></div>
+        <span class="btn">Проверить</span><span class="btn">Скачать новое</span><span class="btn">Пауза</span><span class="btn">Стоп</span><span class="btn">EN</span>
+      </div>
+      <div class="body">
+        <div class="side">
+          <span class="nav on">Репозитории</span><span class="nav">Настройки</span><span class="nav">Журнал</span>
+          <div class="foot">работает в фоне · трей активен<br>v0.1.0<br>Косенков Иван</div>
+        </div>
+        <div class="main">
+          <div class="row" style="justify-content:space-between">
+            <div style="display:flex;align-items:baseline;gap:10px"><h4>Репозитории</h4><span class="count">выбрано 19 из 19</span></div>
+            <div style="display:flex;gap:7px"><span class="btn sm">Импорт JSON</span><span class="btn sm">Экспорт JSON</span></div>
+          </div>
+          <div class="row"><span class="field">владелец/репозиторий</span><span class="btn">Добавить репозиторий</span><span class="btn sm">Выбрать все</span><span class="btn sm">Снять выделение</span></div>
+          <div class="row">
+            <span class="label">Режим отображения</span>
+            <span class="btn on">Сетка</span><span class="btn">Список</span><span class="btn">Без картинок</span><span class="btn sm">Проверить</span>
+          </div>
+          <div class="group">Автор storytold · 19</div>
+          <div class="grid">
+            <div class="card">
+              <div class="ic" style="background:#e0443e">pdf</div>
+              <div class="nm">pdfcraft</div><div class="vr">v0.21.1</div>
+              <div class="pbar sm" style="margin-top:9px"><div class="fill" style="width:62%"></div><span class="pct">62%</span></div>
+            </div>
+            <div class="card">
+              <div class="ic" style="background:#3b6fe0">wor</div>
+              <div class="nm">wordcraft</div><div class="vr">v0.18.1</div>
+              <div class="pbar sm" style="margin-top:9px"><div class="fill" style="width:31%"></div><span class="pct">31%</span></div>
+            </div>
+            <div class="card">
+              <div class="ic" style="background:#25a06b">gri</div>
+              <div class="nm">gridcraft</div><div class="vr">v0.19.1</div>
+              <div class="pbar sm" style="margin-top:9px"><div class="fill ok" style="width:100%"></div><span class="pct">100%</span></div>
+            </div>
+            <div class="card">
+              <div class="ic" style="background:#e08a2e">dec</div>
+              <div class="nm">deckcraft</div><div class="vr">v0.18.1</div>
+              <div class="pbar sm" style="margin-top:9px"><div class="fill" style="width:0%"></div><span class="pct" style="color:var(--app-dim)">0%</span></div>
+            </div>
+            <div class="card">
+              <div class="ic" style="background:#b0459c">pho</div>
+              <div class="nm">photocraft</div><div class="vr">v0.23.1</div>
+            </div>
+            <div class="card">
+              <div class="ic" style="background:#2aa3b8">vec</div>
+              <div class="nm">vectorcraft</div><div class="vr">v0.24.1</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Режим «Список» — максимально подробно</h2>
+  <p class="lead">Каждая строка репозитория показывает тот же блок прогресса, что и легенда:
+    номер очереди, имя файла, скорость, прошедшее время, остаток и процент по центру полосы.</p>
+  <div class="shot">
+    <div class="shot-cap"><b>Репозитории → список</b><span>полная детализация в строке</span><span class="tag">экран 3</span></div>
+    <div class="app">
+      <div class="titlebar">
+        <div class="ti"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M19 12l-7 7-7-7"/></svg></div>
+        <span>CraftPull</span><div class="sp"></div>
+        <div class="wbtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/></svg></div>
+        <div class="wbtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="5" width="14" height="14" rx="1"/></svg></div>
+        <div class="wbtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></div>
+      </div>
+      <div class="appbar">
+        <div class="ai"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M19 12l-7 7-7-7"/></svg></div>
+        <span class="brand">CraftPull</span><span class="sub">менеджер релизов</span>
+        <span class="pill busy">Загрузка · файлов: 2 · 13.7 МБ/с</span>
+        <div class="spacer"></div>
+        <span class="btn">Проверить</span><span class="btn">Скачать новое</span><span class="btn">Пауза</span><span class="btn">Стоп</span><span class="btn">EN</span>
+      </div>
+      <div class="body">
+        <div class="side">
+          <span class="nav on">Репозитории</span><span class="nav">Настройки</span><span class="nav">Журнал</span>
+          <div class="foot">работает в фоне · трей активен<br>v0.1.0<br>Косенков Иван</div>
+        </div>
+        <div class="main">
+          <div class="row" style="justify-content:space-between">
+            <div style="display:flex;align-items:baseline;gap:10px"><h4>Репозитории</h4><span class="count">выбрано 19 из 19</span></div>
+          </div>
+          <div class="row">
+            <span class="label">Режим отображения</span>
+            <span class="btn">Сетка</span><span class="btn on">Список</span><span class="btn">Без картинок</span>
+          </div>
+          <div class="group">Автор storytold · 19</div>
+
+          <div class="lrow">
+            <div class="ic" style="background:#e0443e">pdf</div>
+            <div>
+              <h5>pdfcraft</h5>
+              <div class="slug">storytold/pdfcraft</div>
+              <div class="desc">Читатель и редактор PDF, написанный с нуля на чистом Rust</div>
+              <div class="chipset">
+                <span class="cchip ok">Стабильный v0.21.1</span>
+                <span class="cchip">Проверено: 02:27</span>
+                <span class="cchip">На диске: v0.21.1 · 84.2 МБ · 3 файла</span>
+              </div>
+              <div class="acts"><span class="btn sm">Открыть</span><span class="btn sm">Закрепить</span><span class="btn sm">Релизы</span><span class="btn sm pri">Скачать</span></div>
+            </div>
+            <div class="prow">
+              <div class="top" style="display:flex;align-items:center;gap:9px;margin-bottom:7px">
+                <span class="qnum">#1</span>
+                <span class="fname">pdfcraft-0.21.1-windows-x64-portable.zip</span>
+                <span class="spd">13.7 МБ/с</span>
+              </div>
+              <div class="pbar"><div class="fill" style="width:62%"></div><span class="pct">62%</span></div>
+              <div class="tmeta">
+                <span style="color:var(--app-green)">Качается</span>
+                <span>прошло <b>00:42</b></span><span>осталось <b>~00:26</b></span>
+                <span>66.2 МБ / 106.8 МБ</span><span>очередь <b>1 из 9</b></span>
+              </div>
+            </div>
+          </div>
+
+          <div class="lrow" style="margin-top:10px">
+            <div class="ic" style="background:#3b6fe0">wor</div>
+            <div>
+              <h5>wordcraft</h5>
+              <div class="slug">storytold/wordcraft</div>
+              <div class="desc">Редактор текстов и документов без облака</div>
+              <div class="chipset">
+                <span class="cchip ok">Стабильный v0.18.1</span>
+                <span class="cchip pu">Нестабильный v0.19.0-rc1</span>
+                <span class="cchip">На диске: v0.18.1 · 61.7 МБ · 2 файла</span>
+              </div>
+              <div class="acts"><span class="btn sm">Открыть</span><span class="btn sm">Закрепить</span><span class="btn sm">Релизы</span><span class="btn sm pri">Скачать</span></div>
+            </div>
+            <div class="prow">
+              <div class="top" style="display:flex;align-items:center;gap:9px;margin-bottom:7px">
+                <span class="qnum">#2</span>
+                <span class="fname">wordcraft-0.18.1-linux-x86_64.AppImage</span>
+                <span class="spd">9.4 МБ/с</span>
+              </div>
+              <div class="pbar"><div class="fill" style="width:31%"></div><span class="pct">31%</span></div>
+              <div class="tmeta">
+                <span style="color:var(--app-green)">Качается</span>
+                <span>прошло <b>00:18</b></span><span>осталось <b>~01:12</b></span>
+                <span>16.5 МБ / 53.1 МБ</span><span>очередь <b>2 из 9</b></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Режим «Без картинок» — максимально подробно</h2>
+  <p class="lead">Тот же объём данных без иконок: строка строится по колонкам,
+    прогресс занимает отдельную колонку и остаётся читаемым.</p>
+  <div class="shot">
+    <div class="shot-cap"><b>Репозитории → без картинок</b><span>без иконок, с полным прогрессом</span><span class="tag">экран 4</span></div>
+    <div class="app">
+      <div class="titlebar">
+        <div class="ti"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M19 12l-7 7-7-7"/></svg></div>
+        <span>CraftPull</span><div class="sp"></div>
+        <div class="wbtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/></svg></div>
+        <div class="wbtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="5" width="14" height="14" rx="1"/></svg></div>
+        <div class="wbtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></div>
+      </div>
+      <div class="appbar">
+        <div class="ai"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M19 12l-7 7-7-7"/></svg></div>
+        <span class="brand">CraftPull</span><span class="sub">менеджер релизов</span>
+        <span class="pill busy">Загрузка · файлов: 2 · 13.7 МБ/с</span>
+        <div class="spacer"></div>
+        <span class="btn">Проверить</span><span class="btn">Скачать новое</span><span class="btn">Пауза</span><span class="btn">Стоп</span><span class="btn">EN</span>
+      </div>
+      <div class="body">
+        <div class="side">
+          <span class="nav on">Репозитории</span><span class="nav">Настройки</span><span class="nav">Журнал</span>
+          <div class="foot">работает в фоне · трей активен<br>v0.1.0<br>Косенков Иван</div>
+        </div>
+        <div class="main">
+          <div class="row">
+            <span class="label">Режим отображения</span>
+            <span class="btn">Сетка</span><span class="btn">Список</span><span class="btn on">Без картинок</span>
+          </div>
+          <div class="group">Автор storytold · 19</div>
+
+          <div class="lite">
+            <div>
+              <div class="n">pdfcraft</div>
+              <div class="d">storytold/pdfcraft</div>
+            </div>
+            <div>
+              <div class="k">v0.21.1 · стабильный · проверено 02:27 · на диске 84.2 МБ</div>
+              <div class="d" style="margin-top:3px">Читатель и редактор PDF, написанный с нуля на чистом Rust</div>
+            </div>
+            <div class="prow">
+              <div class="top" style="display:flex;align-items:center;gap:9px;margin-bottom:7px">
+                <span class="qnum">#1</span>
+                <span class="fname">pdfcraft-0.21.1-windows-x64-portable.zip</span>
+                <span class="spd">13.7 МБ/с</span>
+              </div>
+              <div class="pbar"><div class="fill" style="width:62%"></div><span class="pct">62%</span></div>
+              <div class="tmeta">
+                <span style="color:var(--app-green)">Качается</span>
+                <span>прошло <b>00:42</b></span><span>осталось <b>~00:26</b></span>
+                <span>66.2 МБ / 106.8 МБ</span><span>очередь <b>1 из 9</b></span>
+              </div>
+            </div>
+          </div>
+
+          <div class="lite" style="margin-top:8px">
+            <div>
+              <div class="n">wordcraft</div>
+              <div class="d">storytold/wordcraft</div>
+            </div>
+            <div>
+              <div class="k">v0.18.1 · стабильный · v0.19.0-rc1 нестабильный · на диске 61.7 МБ</div>
+              <div class="d" style="margin-top:3px">Редактор текстов и документов без облака</div>
+            </div>
+            <div class="prow">
+              <div class="top" style="display:flex;align-items:center;gap:9px;margin-bottom:7px">
+                <span class="qnum">#2</span>
+                <span class="fname">wordcraft-0.18.1-linux-x86_64.AppImage</span>
+                <span class="spd">9.4 МБ/с</span>
+              </div>
+              <div class="pbar"><div class="fill" style="width:31%"></div><span class="pct">31%</span></div>
+              <div class="tmeta">
+                <span style="color:var(--app-green)">Качается</span>
+                <span>прошло <b>00:18</b></span><span>осталось <b>~01:12</b></span>
+                <span>16.5 МБ / 53.1 МБ</span><span>очередь <b>2 из 9</b></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Выбор файла под текущую систему</h2>
+  <p class="lead">Список собирается из реальных файлов релиза, а не из трёх общих правил.
+    Вариант для текущей ОС помечен и выбран по умолчанию.</p>
+  <div class="shot">
+    <div class="shot-cap"><b>Карточка → выбор файлов</b><span>автоопределение Windows</span><span class="tag">экран 5</span></div>
+    <div class="app">
+      <div class="titlebar">
+        <div class="ti"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M19 12l-7 7-7-7"/></svg></div>
+        <span>CraftPull</span><div class="sp"></div>
+        <div class="wbtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/></svg></div>
+        <div class="wbtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="5" width="14" height="14" rx="1"/></svg></div>
+        <div class="wbtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></div>
+      </div>
+      <div class="appbar">
+        <div class="ai"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M19 12l-7 7-7-7"/></svg></div>
+        <span class="brand">CraftPull</span><span class="sub">менеджер релизов</span>
+        <span class="pill">Готов</span>
+        <div class="spacer"></div>
+        <span class="btn">Проверить</span><span class="btn">Скачать новое</span><span class="btn">Пауза</span><span class="btn">Стоп</span><span class="btn">EN</span>
+      </div>
+      <div class="body">
+        <div class="side">
+          <span class="nav on">Репозитории</span><span class="nav">Настройки</span><span class="nav">Журнал</span>
+          <div class="foot">работает в фоне · трей активен<br>v0.1.0<br>Косенков Иван</div>
+        </div>
+        <div class="main">
+          <div class="group">Автор storytold · 19</div>
+          <div class="sheet">
+            <div class="hd">
+              <div class="ic" style="background:#e0443e">pdf</div>
+              <div>
+                <h5>pdfcraft</h5>
+                <div class="slug">storytold/pdfcraft · v0.21.1 · стабильный</div>
+              </div>
+              <div class="spacer"></div>
+              <span class="btn sm">Открыть папку</span><span class="btn sm">Закрепить</span>
+            </div>
+            <div style="padding:12px 14px">
+              <div class="label" style="margin-bottom:7px">Файл для загрузки — определено автоматически для Windows x64</div>
+              <div class="combo">
+                <span class="os" style="font:500 10px/1 var(--mono);color:var(--app-dim);background:#202834;border:1px solid var(--app-border);border-radius:4px;padding:4px 6px">WIN</span>
+                Windows Portable
+                <span class="caret"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
+              </div>
+              <div class="menu">
+                <div class="mitem on"><span class="os">WIN</span> Windows Portable<span class="sz">2.9 МБ</span><span class="auto">← ваша система</span></div>
+                <div class="mitem"><span class="os">WIN</span> Windows MSI (установщик)<span class="sz">4.1 МБ</span></div>
+                <div class="mitem"><span class="os">WIN</span> Windows Setup .exe<span class="sz">4.0 МБ</span></div>
+                <div class="mitem"><span class="os">LNX</span> Ubuntu AppImage<span class="sz">3.3 МБ</span></div>
+                <div class="mitem"><span class="os">LNX</span> Ubuntu tar.gz<span class="sz">2.7 МБ</span></div>
+                <div class="mitem"><span class="os">SRC</span> Исходный код<span class="sz">4.8 МБ</span></div>
+              </div>
+              <div class="tmeta" style="margin-top:10px">
+                <span>файлов в релизе: <b>6</b></span>
+                <span>проверка SHA-256: <b>включена</b></span>
+                <span>канал: <b>стабильный</b></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Кнопка «Проверить» — список проверок</h2>
+  <p class="lead">Пока идёт проверка, видно, что именно проверяется: что уже готово,
+    что сейчас в работе и что ещё в очереди.</p>
+  <div class="shot">
+    <div class="shot-cap"><b>Журнал → «Проверка репозиториев»</b><span>живой список проверок</span><span class="tag">экран 6</span></div>
+    <div class="app">
+      <div class="titlebar">
+        <div class="ti"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M19 12l-7 7-7-7"/></svg></div>
+        <span>CraftPull</span><div class="sp"></div>
+        <div class="wbtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/></svg></div>
+        <div class="wbtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="5" width="14" height="14" rx="1"/></svg></div>
+        <div class="wbtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></div>
+      </div>
+      <div class="appbar">
+        <div class="ai"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M19 12l-7 7-7-7"/></svg></div>
+        <span class="brand">CraftPull</span><span class="sub">менеджер релизов</span>
+        <span class="pill busy">Проверка: 7 из 19</span>
+        <div class="spacer"></div>
+        <span class="btn">Проверить</span><span class="btn">Скачать новое</span><span class="btn">Пауза</span><span class="btn">Стоп</span><span class="btn">EN</span>
+      </div>
+      <div class="body">
+        <div class="side">
+          <span class="nav">Репозитории</span><span class="nav">Настройки</span><span class="nav on">Журнал</span>
+          <div class="foot">работает в фоне · трей активен<br>v0.1.0<br>Косенков Иван</div>
+        </div>
+        <div class="main">
+          <div class="row" style="justify-content:space-between">
+            <h4>Журнал</h4>
+            <div style="display:flex;gap:7px"><span class="btn sm">Открыть файл</span><span class="btn sm">Очистить</span></div>
+          </div>
+
+          <div class="group" style="margin-top:6px">Проверка репозиториев</div>
+          <div class="pbar" style="margin-bottom:10px"><div class="fill" style="width:37%"></div><span class="pct">37%</span></div>
+          <div class="checklist">
+            <div class="citem">
+              <span class="ic ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>
+              <span>storytold/pdfcraft — релизы, описание, иконка</span>
+              <span class="res">10 релизов · 0.9 с</span>
+            </div>
+            <div class="citem">
+              <span class="ic ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>
+              <span>storytold/wordcraft — релизы, описание, иконка</span>
+              <span class="res">10 релизов · 0.7 с</span>
+            </div>
+            <div class="citem">
+              <span class="ic run"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.2-8.6"/></svg></span>
+              <span>storytold/gridcraft — запрос к GitHub…</span>
+              <span class="res">идёт проверка</span>
+            </div>
+            <div class="citem">
+              <span class="ic wait"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><circle cx="12" cy="12" r="8"/></svg></span>
+              <span>storytold/deckcraft — в очереди</span>
+              <span class="res">ожидает</span>
+            </div>
+            <div class="citem">
+              <span class="ic wait"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><circle cx="12" cy="12" r="8"/></svg></span>
+              <span>storytold/photocraft — в очереди</span>
+              <span class="res">ожидает</span>
+            </div>
+            <div class="citem">
+              <span class="ic wait"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><circle cx="12" cy="12" r="8"/></svg></span>
+              <span>остальные 12 репозиториев — в очереди</span>
+              <span class="res">ожидает</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Релизы внутри страницы приложения</h2>
+  <p class="lead">Без отдельного окна: у репозитория разворачивающийся список релизов,
+    внутри — файлы с галочками, а внизу всегда видимая кнопка «Скачать выбранное».</p>
+  <div class="shot">
+    <div class="shot-cap"><b>Репозитории → раскрытая карточка</b><span>список файлов и кнопка внизу</span><span class="tag">экран 7</span></div>
+    <div class="app">
+      <div class="titlebar">
+        <div class="ti"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M19 12l-7 7-7-7"/></svg></div>
+        <span>CraftPull</span><div class="sp"></div>
+        <div class="wbtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/></svg></div>
+        <div class="wbtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="5" width="14" height="14" rx="1"/></svg></div>
+        <div class="wbtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></div>
+      </div>
+      <div class="appbar">
+        <div class="ai"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M19 12l-7 7-7-7"/></svg></div>
+        <span class="brand">CraftPull</span><span class="sub">менеджер релизов</span>
+        <span class="pill">Готов</span>
+        <div class="spacer"></div>
+        <span class="btn">Проверить</span><span class="btn">Скачать новое</span><span class="btn">Пауза</span><span class="btn">Стоп</span><span class="btn">EN</span>
+      </div>
+      <div class="body">
+        <div class="side">
+          <span class="nav on">Репозитории</span><span class="nav">Настройки</span><span class="nav">Журнал</span>
+          <div class="foot">работает в фоне · трей активен<br>v0.1.0<br>Косенков Иван</div>
+        </div>
+        <div class="main">
+          <div class="sheet">
+            <div class="hd">
+              <div class="ic" style="background:#e0443e">pdf</div>
+              <div>
+                <h5>pdfcraft</h5>
+                <div class="slug">storytold/pdfcraft · 10 релизов · последняя проверка 02:27</div>
+              </div>
+              <div class="spacer"></div>
+              <span class="btn sm">Открыть папку</span><span class="btn sm">Закрепить</span>
+            </div>
+
+            <div class="rel">
+              <span class="caret"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
+              <span class="tag">v0.21.1</span>
+              <span class="st done" style="color:var(--app-green);background:rgba(52,211,153,.12)">стабильный</span>
+              <span class="when">12 ноя 2026, 02:18</span>
+            </div>
+            <div class="files">
+              <div class="file"><span class="cbx on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>pdfcraft-0.21.1-windows-x64-portable.zip <span style="color:var(--app-dim);margin-left:auto">2.9 МБ</span></div>
+              <div class="file"><span class="cbx on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>pdfcraft-0.21.1-windows-x64.msi <span style="color:var(--app-dim);margin-left:auto">4.1 МБ</span></div>
+              <div class="file"><span class="cbx"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>pdfcraft-0.21.1-linux-x86_64.AppImage <span style="color:var(--app-dim);margin-left:auto">3.3 МБ</span></div>
+              <div class="file"><span class="cbx"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>pdfcraft-0.21.1-source.zip <span style="color:var(--app-dim);margin-left:auto">4.8 МБ</span></div>
+            </div>
+
+            <div class="rel">
+              <span class="caret"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
+              <span class="tag">v0.21.0</span>
+              <span class="st done" style="color:var(--app-green);background:rgba(52,211,153,.12)">стабильный</span>
+              <span class="when">28 окт 2026, 18:40</span>
+            </div>
+            <div class="rel">
+              <span class="caret"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
+              <span class="tag">v0.22.0-rc1</span>
+              <span class="st" style="color:var(--app-purple);background:rgba(192,132,252,.12)">нестабильный</span>
+              <span class="when">14 ноя 2026, 09:02</span>
+            </div>
+
+            <div class="sticky">
+              <span class="sum">Выбрано: <b>2 файла</b> · <b>7.0 МБ</b> · релиз <b>v0.21.1</b></span>
+              <div class="spacer"></div>
+              <span class="btn sm">Снять выделение</span>
+              <span class="btn sm">Все файлы релиза</span>
+              <span class="btn pri">Скачать выбранное</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Настройки: целые числа и каналы</h2>
+  <p class="lead">Лимит параллельных загрузок — целое число с максимумом,
+    нестабильные релизы по умолчанию выключены.</p>
+  <div class="shot">
+    <div class="shot-cap"><b>Настройки → Сеть и скорость</b><span>целые числа, максимум, каналы</span><span class="tag">экран 8</span></div>
+    <div class="app">
+      <div class="titlebar">
+        <div class="ti"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M19 12l-7 7-7-7"/></svg></div>
+        <span>CraftPull</span><div class="sp"></div>
+        <div class="wbtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/></svg></div>
+        <div class="wbtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="5" width="14" height="14" rx="1"/></svg></div>
+        <div class="wbtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></div>
+      </div>
+      <div class="appbar">
+        <div class="ai"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M19 12l-7 7-7-7"/></svg></div>
+        <span class="brand">CraftPull</span><span class="sub">менеджер релизов</span>
+        <span class="pill">Готов</span>
+        <div class="spacer"></div>
+        <span class="btn">Проверить</span><span class="btn">Скачать новое</span><span class="btn">Пауза</span><span class="btn">Стоп</span><span class="btn">EN</span>
+      </div>
+      <div class="body">
+        <div class="side">
+          <span class="nav">Репозитории</span><span class="nav on">Настройки</span><span class="nav">Журнал</span>
+          <div class="foot">работает в фоне · трей активен<br>v0.1.0<br>Косенков Иван</div>
+        </div>
+        <div class="main">
+          <h4>Настройки</h4>
+          <div class="cardset" style="margin-top:12px">
+            <h4>Сеть и скорость</h4>
+            <div class="checks" style="gap:11px">
+              <div class="chk"><span class="cbox on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span> Без ограничения скорости</div>
+              <div style="display:flex;align-items:center;gap:12px">
+                <span style="width:190px;color:var(--app-dim)">Параллельных загрузок</span>
+                <div class="slider"><div class="sf" style="width:47%"></div><div class="kn" style="left:47%"></div></div>
+                <span class="numbox">8</span>
+                <span style="color:var(--app-dim);font-size:11px">максимум 16</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:12px">
+                <span style="width:190px;color:var(--app-dim)">Режим загрузки</span>
+                <span class="btn on">Параллельно</span><span class="btn">Последовательно</span>
+              </div>
+              <div class="chk"><span class="cbox on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span> Проверять SHA-256 после загрузки</div>
+            </div>
+            <div class="tmeta" style="margin-top:10px">
+              <span>Параллельно: несколько файлов сразу, в пределах лимита. Последовательно: строго один файл за раз.</span>
+            </div>
+          </div>
+
+          <div class="cardset" style="margin-top:12px">
+            <h4>Каналы релизов</h4>
+            <div class="checks">
+              <div class="chk"><span class="cbox on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span> Стабильные релизы</div>
+              <div class="chk"><span class="cbox"></span> Нестабильные релизы <span style="color:var(--app-dim);font-size:11px">— по умолчанию выключено</span></div>
+            </div>
+            <div class="tmeta" style="margin-top:8px">
+              <span>Нестабильный канал включает pre-release, nightly и rc-сборки. По умолчанию выключен.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>План работ</h2>
+  <p class="lead">Порядок реализации после согласования макета.</p>
+  <div class="plan">
+    <div class="step"><span class="k">01</span><p><b>Модель прогресса.</b> Добавить в задачу номер в очереди, прошедшее время и метку файла; измерять скорость скользящим окном, чтобы остаток считался честно.</p></div>
+    <div class="step"><span class="k">02</span><p><b>Полоса с процентом по центру.</b> Свой виджет вместо стандартного <code>ProgressBar</code>: заливка, процент по центру, опциональные подписи.</p></div>
+    <div class="step"><span class="k">03</span><p><b>Легенда загрузок.</b> Полная детализация: №, имя, скорость, прошло, осталось, объём, процент.</p></div>
+    <div class="step"><span class="k">04</span><p><b>Карточки и строки.</b> В сетке — только полоса и процент; в «Списке» и «Без картинок» — полный блок прогресса.</p></div>
+    <div class="step"><span class="k">05</span><p><b>Починка русского текста.</b> Убрать абсолютные координаты там, где строки могут наезжать: считать ширину, резервировать место, переносить длинные подписи.</p></div>
+    <div class="step"><span class="k">06</span><p><b>Выбор файла под ОС.</b> Собрать список вариантов из файлов релиза, выбрать по умолчанию системный, запомнить выбор.</p></div>
+    <div class="step"><span class="k">07</span><p><b>Список проверок.</b> Отдельная панель прогресса проверки: готово / проверяется / в очереди, с итогом по репозиторию.</p></div>
+    <div class="step"><span class="k">08</span><p><b>Релизы внутри страницы.</b> Убрать отдельное окно, разворачивать список релизов в карточке, кнопку «Скачать выбранное» закрепить внизу.</p></div>
+    <div class="step"><span class="k">09</span><p><b>Параллельные загрузки.</b> Целый лимит до максимума, без дробной части; режимы «параллельно» и «последовательно» сохраняются.</p></div>
+    <div class="step"><span class="k">10</span><p><b>Каналы по умолчанию.</b> Нестабильные релизы выключены в новых конфигах; для существующих — привести к тому же правилу при первой загрузке.</p></div>
+    <div class="step"><span class="k">11</span><p><b>Иконки вне репозитория.</b> Убрать чужие иконки приложений из исходников и из portable-пакетов; в репозитории остаётся только своя иконка CraftPull.<span class="flag">важно</span></p></div>
+    <div class="step"><span class="k">12</span><p><b>Сборка, установка, скриншоты.</b> Пересобрать, обновить скриншоты в <code>docs/</code> и README, выпустить v0.2.0.</p></div>
+  </div>
+</section>
+
+<footer>
+  <span>CraftPull · макет интерфейса · версия 0.1.0 → 0.2.0</span>
+  <span>Косенков Иван · support@chekak.store · chekak.store</span>
+</footer>
+
+</div>
+</body>
+</html>
