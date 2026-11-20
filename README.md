@@ -16,7 +16,7 @@
     <img src="https://img.shields.io/badge/Rust-1.82%2B-000?logo=rust&logoColor=white" alt="Rust">
     <img src="https://img.shields.io/badge/GUI-egui%200.31-blue" alt="egui">
     <img src="https://img.shields.io/badge/license-MIT%20%2F%20Apache--2.0-blue" alt="License">
-    <img src="https://img.shields.io/badge/platforms-Windows%20%7C%20Ubuntu-lightgrey" alt="Platforms">
+    <img src="https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Ubuntu-lightgrey" alt="Platforms">
   </p>
 </div>
 
@@ -200,10 +200,12 @@ The **Check** button shows a live list of what is being checked at the moment.
 | **File filter** | The real files of the release, with the build for the current OS picked automatically |
 | **Views** | **Grid** (default) with a spring-animated hero card, **List** and **Light** (no icons) — both with a detailed progress block |
 | **Icons** | Repository icons are downloaded once and cached on disk; a repository without one gets the CraftPull icon |
-| **Import / Export** | The repository list, with descriptions and pins, as JSON |
+| **Import / Export** | The repository list, with descriptions, pins and purposes, as JSON |
+| **Purpose** | Every program has a short purpose («PDF-документы», «Монтаж видео», «Скриншоты») — shown in the grid tile and kept in the JSON |
+| **License** | The program's own license — `MIT / Apache-2.0` — in the sidebar, with an explanation on hover |
 | **Languages** | English (default) and Russian — the **EN / RU** button in the header switches instantly |
 | **Autostart** | Optional start with Windows, hidden in the tray |
-| **Portable builds** | Windows `zip` and Ubuntu `tar.gz` with `.desktop` and `install.sh` |
+| **Portable builds** | Windows `zip`, macOS `.app` (universal) and Ubuntu `tar.gz` with `.desktop` and `install.sh` |
 
 ---
 
@@ -224,7 +226,7 @@ shown in the **About** section of the settings.
 
 ## Requirements
 
-* **To run a ready build:** Windows 10/11 or Ubuntu 22.04+
+* **To run a ready build:** Windows 10/11, macOS 11+ or Ubuntu 22.04+
 * **To build from source:** Rust 1.82 or newer
 * **For self-update:** `cargo` must be available in `PATH`
 
@@ -237,12 +239,14 @@ Ready-made packages are published on the **[Releases page](https://github.com/Ko
 | Platform | Package |
 |---|---|
 | Windows x64 | `craftpull-*-windows-x64.zip` — portable, no installer needed |
+| macOS (Intel + Apple Silicon) | `craftpull-*-macos-universal.zip` — `CraftPull.app`, runs on both architectures |
 | Ubuntu / Debian x86_64 | `craftpull-*-linux-x86_64.deb` — `sudo apt install ./craftpull-*.deb` |
 | Linux x86_64 | `craftpull-*-linux-x86_64.tar.gz` — with `install.sh` and a `.desktop` entry |
 
-Unpack the Windows archive and run `craftpull.exe`. The `.deb` package puts the binary into
-`/usr/bin`, the icon into `/usr/share/icons` and the desktop entry into
-`/usr/share/applications`. The Linux archive contains `install.sh`, which puts the binary into
+Unpack the Windows archive and run `craftpull.exe`. The macOS archive contains `CraftPull.app` —
+unpack it and drag the app into «Applications», or run it straight from the folder. The `.deb`
+package puts the binary into `/usr/bin`, the icon into `/usr/share/icons` and the desktop entry
+into `/usr/share/applications`. The Linux archive contains `install.sh`, which puts the binary into
 `~/.local/bin` and registers the desktop entry and the icon.
 
 ---
@@ -272,10 +276,15 @@ The binary lands in `target/release/craftpull`.
 ./packaging/build-deb.sh
 ```
 
+```sh
+# macOS: a universal .app (Intel + Apple Silicon) and a zip with it
+./packaging/build-macos.sh
+```
+
 CI builds all the packages automatically: `.github/workflows/portable.yml`
 (triggered by a `v*` tag or manually). The Ubuntu package ships `install.sh`, which puts the
 binary into `~/.local/bin` and registers the `.desktop` entry and the icon; the `.deb` package
-installs the same files system-wide.
+installs the same files system-wide; the macOS package is a ready-to-move `CraftPull.app`.
 
 ### Desktop shortcut (Windows)
 
@@ -359,6 +368,7 @@ quota lets you down: fresh data is shown instantly and refreshed in the backgrou
       "slug": "storytold/pdfcraft",
       "enabled": true,
       "description": "An open-source PDF reader and editor written from scratch in pure Rust",
+      "purpose": "PDF-документы",
       "pinned": ["v0.21.1"],
       "filter": "Auto",
       "clone_source": false
@@ -371,6 +381,10 @@ quota lets you down: fresh data is shown instantly and refreshed in the backgrou
 `WindowsMsi`, `WindowsSetup`, `LinuxAppImage`, `LinuxTarGz`, `LinuxDeb`, `LinuxRpm`,
 `Source` (source archive only), `All` (every file of the release).
 The old value `Portable` is still accepted and behaves like `Auto`.
+
+`purpose`: a short line about what the program is for («PDF-документы», «Монтаж видео»,
+«Скриншоты»). It is shown in the grid tile under the name and travels with the repository
+through export and import. The field is optional — an empty value simply means "no purpose".
 
 ---
 

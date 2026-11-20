@@ -16,7 +16,7 @@
     <img src="https://img.shields.io/badge/Rust-1.82%2B-000?logo=rust&logoColor=white" alt="Rust">
     <img src="https://img.shields.io/badge/GUI-egui%200.31-blue" alt="egui">
     <img src="https://img.shields.io/badge/license-MIT%20%2F%20Apache--2.0-blue" alt="Лицензия">
-    <img src="https://img.shields.io/badge/platforms-Windows%20%7C%20Ubuntu-lightgrey" alt="Платформы">
+    <img src="https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Ubuntu-lightgrey" alt="Платформы">
   </p>
 </div>
 
@@ -200,10 +200,12 @@ GitHub, для каждого показан последний стабильн
 | **Выбор файла** | Реальные файлы релиза, сборка под текущую ОС подставляется сама |
 | **Виды** | **Сетка** (по умолчанию) с пружинной карточкой-героем, **Список** и **Без картинок** — в последних двух подробный блок прогресса |
 | **Иконки** | Иконки репозиториев скачиваются один раз и кэшируются на диске; если иконки нет — ставится иконка CraftPull |
-| **Импорт / Экспорт** | Список репозиториев с описаниями и закрепами в JSON |
+| **Импорт / Экспорт** | Список репозиториев с описаниями, закрепами и назначениями в JSON |
+| **Назначение** | У каждой программы есть короткое назначение («PDF-документы», «Монтаж видео», «Скриншоты») — оно видно в плитке и хранится в JSON |
+| **Лицензия** | Лицензия самой программы — `MIT / Apache-2.0` — в боковой панели, с пояснением при наведении |
 | **Языки** | Английский (по умолчанию) и русский — кнопка **EN / RU** в шапке переключает мгновенно |
 | **Автозапуск** | Необязательный запуск вместе с Windows, сразу в трее |
-| **Portable-сборки** | Windows `zip` и Ubuntu `tar.gz` с `.desktop` и `install.sh` |
+| **Portable-сборки** | Windows `zip`, macOS `.app` (universal) и Ubuntu `tar.gz` с `.desktop` и `install.sh` |
 
 ---
 
@@ -224,7 +226,7 @@ GitHub, для каждого показан последний стабильн
 
 ## Требования
 
-* **Для готовой сборки:** Windows 10/11 или Ubuntu 22.04+
+* **Для готовой сборки:** Windows 10/11, macOS 11+ или Ubuntu 22.04+
 * **Для сборки из исходников:** Rust 1.82 или новее
 * **Для самообновления:** в `PATH` должен быть `cargo`
 
@@ -237,13 +239,15 @@ GitHub, для каждого показан последний стабильн
 | Платформа | Пакет |
 |---|---|
 | Windows x64 | `craftpull-*-windows-x64.zip` — portable, установщик не нужен |
+| macOS (Intel + Apple Silicon) | `craftpull-*-macos-universal.zip` — `CraftPull.app`, работает на обеих архитектурах |
 | Ubuntu / Debian x86_64 | `craftpull-*-linux-x86_64.deb` — `sudo apt install ./craftpull-*.deb` |
 | Linux x86_64 | `craftpull-*-linux-x86_64.tar.gz` — с `install.sh` и `.desktop`-записью |
 
-Распакуйте архив для Windows и запустите `craftpull.exe`. Пакет `.deb` кладёт бинарник в
-`/usr/bin`, иконку — в `/usr/share/icons`, а `.desktop`-запись — в `/usr/share/applications`.
-Архив для Linux содержит `install.sh`, который кладёт бинарник в `~/.local/bin` и регистрирует
-запись в меню приложений и иконку.
+Распакуйте архив для Windows и запустите `craftpull.exe`. Архив для macOS содержит
+`CraftPull.app` — распакуйте и перетащите приложение в «Программы», либо запустите прямо из
+папки. Пакет `.deb` кладёт бинарник в `/usr/bin`, иконку — в `/usr/share/icons`, а
+`.desktop`-запись — в `/usr/share/applications`. Архив для Linux содержит `install.sh`, который
+кладёт бинарник в `~/.local/bin` и регистрирует запись в меню приложений и иконку.
 
 ---
 
@@ -272,10 +276,15 @@ cargo build --release
 ./packaging/build-deb.sh
 ```
 
+```sh
+# macOS: universal .app (Intel + Apple Silicon) и zip с ним
+./packaging/build-macos.sh
+```
+
 Все пакеты собирает CI: `.github/workflows/portable.yml`
 (запуск по тегу `v*` или вручную). Ubuntu-пакет содержит `install.sh`, который кладёт
 бинарник в `~/.local/bin` и регистрирует `.desktop`-запись и иконку; пакет `.deb`
-ставит те же файлы на уровне системы.
+ставит те же файлы на уровне системы; macOS-пакет — готовое приложение `CraftPull.app`.
 
 ### Ярлык на рабочем столе (Windows)
 
@@ -360,6 +369,7 @@ cargo build --release
       "slug": "storytold/pdfcraft",
       "enabled": true,
       "description": "An open-source PDF reader and editor written from scratch in pure Rust",
+      "purpose": "PDF-документы",
       "pinned": ["v0.21.1"],
       "filter": "Auto",
       "clone_source": false
@@ -372,6 +382,10 @@ cargo build --release
 `WindowsMsi`, `WindowsSetup`, `LinuxAppImage`, `LinuxTarGz`, `LinuxDeb`, `LinuxRpm`,
 `Source` (только архив с исходниками), `All` (все файлы релиза).
 Старое значение `Portable` принимается и работает как `Auto`.
+
+`purpose`: короткая строка о назначении программы («PDF-документы», «Монтаж видео»,
+«Скриншоты»). Она показывается в плитке под названием и переезжает вместе с репозиторием
+при экспорте и импорте. Поле необязательное — пустое значение означает просто «назначения нет».
 
 ---
 
