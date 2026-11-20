@@ -1,6 +1,6 @@
 //! Вкладка «Репозитории»: группировка по авторам, режимы отображения, карточки.
 
-use super::{hero, theme, CraftApp};
+use super::{hero, progress, releases, theme, CraftApp};
 use crate::config::{RepoConfig, ViewMode};
 use crate::lang::{t, tf};
 use crate::model::*;
@@ -133,11 +133,11 @@ pub fn show(ui: &mut egui::Ui, app: &mut CraftApp, ctx: &Context) {
                 });
                 // Ширину берём у панели: бесконечная ширина ломает
                 // раскладку сетки (available_width становится inf).
-                let bar_w = ui.available_width();
-                ui.add(
-                    egui::ProgressBar::new((done as f64 / total as f64).clamp(0.0, 1.0) as f32)
-                        .desired_width(bar_w)
-                        .fill(theme::ACCENT),
+                progress::bar(
+                    ui,
+                    (done as f64 / total as f64).clamp(0.0, 1.0) as f32,
+                    theme::ACCENT,
+                    18.0,
                 );
             });
     }
@@ -384,45 +384,37 @@ fn repo_card(ui: &mut egui::Ui, app: &mut CraftApp, rc: &RepoConfig, ctx: &Conte
                 });
         }
 
-        // Активные загрузки.
+        // Активные загрузки — подробно: номер в очереди, имя, скорость,
+        // прошедшее время и оценка остатка.
         let tasks = app.tasks_for(&rc.slug);
-        let active: Vec<&TaskProgress> = tasks.iter().filter(|t| !t.state.is_finished()).collect();
+        let active: Vec<TaskProgress> = tasks
+            .into_iter()
+            .filter(|t| !t.state.is_finished())
+            .collect();
         if !active.is_empty() {
             ui.add_space(8.0);
-            for task in active {
-                ui.horizontal(|ui| {
-                    let label = format!(
-                        "{} · {}",
-                        task.asset,
-                        match task.state {
-                            TaskState::Paused => t("status.paused").to_string(),
-                            TaskState::Queued => "…".to_string(),
-                            _ => human_speed(task.speed),
-                        }
-                    );
-                    ui.add(
-                        egui::ProgressBar::new(task.fraction())
-                            .desired_width(220.0)
-                            .fill(match task.state {
-                                TaskState::Paused => theme::WARN,
-                                _ => theme::ACCENT,
-                            })
-                            .text(RichText::new(label).size(11.0)),
-                    );
-                    let remaining = task.total.saturating_sub(task.downloaded);
-                    ui.label(
-                        RichText::new(format!(
-                            "{} · {} {}",
-                            human_size(task.downloaded),
-                            human_eta(remaining, task.speed),
-                            t("status.of")
-                        ))
-                        .size(11.0)
-                        .color(theme::DIM),
-                    );
-                });
+            for task in &active {
+                progress::detailed(ui, task);
+                ui.add_space(4.0);
             }
         }
+
+        // Выбор файла: варианты из файлов релиза, по умолчанию — под текущую ОС.
+        ui.add_space(6.0);
+        ui.horizontal(|ui| {
+            ui.label(
+                RichText::new(t("repo.filter"))
+                    .size(11.5)
+                    .color(theme::DIM),
+            );
+            if let Some(kind) = releases::asset_combo(ui, app, &rc.slug, rc.filter) {
+                let mut cfg = app.state.cfg();
+                if let Some(r) = cfg.repo_mut(&rc.slug) {
+                    r.filter = kind;
+                }
+                app.state.save_cfg(cfg);
+            }
+        });
 
         // Ошибка.
         if let Some(err) = rt.as_ref().and_then(|r| r.last_error.clone()) {
@@ -460,15 +452,7 @@ fn repo_card(ui: &mut egui::Ui, app: &mut CraftApp, rc: &RepoConfig, ctx: &Conte
         );
     }
     if open_popup {
-        if let Some(rt) = rt.clone() {
-            app.popup = Some(super::ReleasePopup {
-                slug: rc.slug.clone(),
-                releases: rt.releases.clone(),
-                pinned: rc.pinned.clone(),
-            });
-            app.popup_expanded = None;
-            app.popup_assets.clear();
-        }
+        app.open_releases(&rc.slug);
     }
     if toggle_pin {
         let mut cfg = app.state.cfg();
@@ -515,7 +499,7 @@ fn repo_card(ui: &mut egui::Ui, app: &mut CraftApp, rc: &RepoConfig, ctx: &Conte
     }
 }
 
-/// Компактная строка без картинок.
+/// Компактная строка без картинок — с подробным блоком прогресса.
 fn light_row(ui: &mut egui::Ui, app: &mut CraftApp, rc: &RepoConfig) {
     let rt = app.state.shared.repo_runtime(&rc.slug);
     let mut do_download = false;
@@ -527,32 +511,74 @@ fn light_row(ui: &mut egui::Ui, app: &mut CraftApp, rc: &RepoConfig) {
         .inner_margin(egui::Margin::symmetric(10, 6))
         .show(ui, |ui| {
             ui.horizontal(|ui| {
-                let mark = if rc.enabled { "[x]" } else { "[ ]" };
-                if ui
-                    .add_sized([18.0, 18.0], egui::Button::new(mark).small())
-                    .on_hover_text(t("common.enabled"))
-                    .clicked()
-                {
-                    let mut cfg = app.state.cfg();
-                    if let Some(r) = cfg.repo_mut(&rc.slug) {
-                        r.enabled = !r.enabled;
+                // Название и адрес репозитория.
+                ui.vertical(|ui| {
+                    ui.set_width(160.0);
+                    ui.horizontal(|ui| {
+                        let mark = if rc.enabled { "[x]" } else { "[ ]" };
+                        if ui
+                            .add_sized([18.0, 18.0], egui::Button::new(mark).small())
+                            .on_hover_text(t("common.enabled"))
+                            .clicked()
+                        {
+                            let mut cfg = app.state.cfg();
+                            if let Some(r) = cfg.repo_mut(&rc.slug) {
+                                r.enabled = !r.enabled;
+                            }
+                            app.state.save_cfg(cfg);
+                        }
+                        ui.label(RichText::new(rc.short_name()).strong().size(13.0));
+                    });
+                    ui.label(RichText::new(&rc.slug).size(10.5).color(theme::DIM));
+                });
+
+                // Версии, проверка и описание — фиксированной ширины,
+                // иначе длинное описание распирает всю строку.
+                ui.vertical(|ui| {
+                    ui.set_width(330.0);
+                    let mut meta: Vec<String> = Vec::new();
+                    if let Some(rel) = rt.as_ref().and_then(|r| r.latest_stable.as_ref()) {
+                        meta.push(format!("{} · {}", rel.tag, t("popup.stable")));
                     }
-                    app.state.save_cfg(cfg);
-                }
-                ui.label(RichText::new(rc.short_name()).strong().size(13.0));
-                if let Some(rel) = rt.as_ref().and_then(|r| r.latest_stable.as_ref()) {
-                    ui.label(RichText::new(&rel.tag).size(11.5).color(theme::OK));
-                }
-                if let Some(rel) = rt.as_ref().and_then(|r| r.latest_edge.as_ref()) {
-                    ui.label(RichText::new(&rel.tag).size(11.5).color(theme::EDGE));
-                }
-                if !rc.description.trim().is_empty() {
-                    ui.label(
-                        RichText::new(&rc.description)
-                            .size(11.5)
-                            .color(theme::DIM),
-                    );
-                }
+                    if let Some(rel) = rt.as_ref().and_then(|r| r.latest_edge.as_ref()) {
+                        meta.push(format!("{} · {}", rel.tag, t("popup.edge")));
+                    }
+                    if let Some(check) = rt.as_ref().and_then(|r| r.last_check.clone()) {
+                        meta.push(format!("{}: {check}", t("repo.checked")));
+                    }
+                    if !meta.is_empty() {
+                        ui.add(
+                            egui::Label::new(RichText::new(meta.join(" · ")).size(11.0).color(theme::DIM))
+                                .wrap(),
+                        );
+                    }
+                    if !rc.description.trim().is_empty() {
+                        ui.add(
+                            egui::Label::new(
+                                RichText::new(&rc.description)
+                                    .size(11.0)
+                                    .color(theme::TEXT)
+                                    .weak(),
+                            )
+                            .wrap(),
+                        );
+                    }
+                });
+
+                // Прогресс — отдельной колонкой, максимально подробно.
+                let tasks = app.tasks_for(&rc.slug);
+                let active: Vec<TaskProgress> = tasks
+                    .into_iter()
+                    .filter(|t| !t.state.is_finished())
+                    .collect();
+                ui.vertical(|ui| {
+                    ui.set_min_width(300.0);
+                    for task in &active {
+                        progress::detailed(ui, task);
+                        ui.add_space(4.0);
+                    }
+                });
+
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     if ui.button(t("common.download")).clicked() {
                         do_download = true;
@@ -578,15 +604,7 @@ fn light_row(ui: &mut egui::Ui, app: &mut CraftApp, rc: &RepoConfig) {
         );
     }
     if open_popup {
-        if let Some(rt) = rt {
-            app.popup = Some(super::ReleasePopup {
-                slug: rc.slug.clone(),
-                releases: rt.releases.clone(),
-                pinned: rc.pinned.clone(),
-            });
-            app.popup_expanded = None;
-            app.popup_assets.clear();
-        }
+        app.open_releases(&rc.slug);
     }
 }
 

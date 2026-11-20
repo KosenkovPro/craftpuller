@@ -110,6 +110,14 @@ pub struct TaskProgress {
     pub speed: f64,
     pub state: TaskState,
     pub error: Option<String>,
+    /// Порядковый номер постановки в очередь: чем меньше, тем раньше.
+    pub seq: u64,
+    /// Момент постановки в очередь, мс с начала эпохи.
+    pub started_at: u64,
+    /// Место в очереди загрузки (1 — первый).
+    pub queue: usize,
+    /// Сколько всего задач в очереди.
+    pub queue_total: usize,
 }
 
 impl TaskProgress {
@@ -123,6 +131,41 @@ impl TaskProgress {
         } else {
             (self.downloaded as f64 / self.total as f64).clamp(0.0, 1.0) as f32
         }
+    }
+
+    /// Сколько секунд идёт загрузка.
+    pub fn elapsed_secs(&self) -> u64 {
+        let now = now_ms();
+        now.saturating_sub(self.started_at) / 1000
+    }
+
+    /// Осталось примерно столько секунд.
+    pub fn remaining_secs(&self) -> Option<u64> {
+        if self.speed <= 1.0 || self.total == 0 {
+            return None;
+        }
+        let left = self.total.saturating_sub(self.downloaded);
+        Some((left as f64 / self.speed) as u64)
+    }
+}
+
+/// Текущее время, мс с начала эпохи.
+pub fn now_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
+}
+
+/// Форматирование времени в формате «мм:сс» или «ч:мм:сс».
+pub fn human_duration(secs: u64) -> String {
+    let h = secs / 3600;
+    let m = (secs % 3600) / 60;
+    let s = secs % 60;
+    if h > 0 {
+        format!("{h}:{m:02}:{s:02}")
+    } else {
+        format!("{m:02}:{s:02}")
     }
 }
 
@@ -188,32 +231,5 @@ pub fn human_speed(bytes_per_sec: f64) -> String {
     } else {
         let size = human_size(bytes_per_sec as u64);
         crate::lang::tf("unit.per_sec", &[("{v}", &size)])
-    }
-}
-
-/// Оценка оставшегося времени.
-pub fn human_eta(remaining: u64, speed: f64) -> String {
-    if speed <= 1.0 || remaining == 0 {
-        return "—".to_string();
-    }
-    let secs = remaining as f64 / speed;
-    if secs < 60.0 {
-        crate::lang::tf("unit.secs", &[("{v}", &format!("{secs:.0}"))])
-    } else if secs < 3600.0 {
-        crate::lang::tf(
-            "unit.mins",
-            &[
-                ("{v}", &format!("{}", (secs / 60.0) as u64)),
-                ("{s}", &format!("{}", (secs % 60.0) as u64)),
-            ],
-        )
-    } else {
-        crate::lang::tf(
-            "unit.hours",
-            &[
-                ("{v}", &format!("{}", (secs / 3600.0) as u64)),
-                ("{m}", &format!("{}", ((secs % 3600.0) / 60.0) as u64)),
-            ],
-        )
     }
 }

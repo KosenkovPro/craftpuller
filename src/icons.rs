@@ -2,6 +2,21 @@
 
 use reqwest::Client;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
+
+/// Иконки сторонних приложений отключены: в репозитории и на скриншотах
+/// не должно быть чужих логотипов — это авторские права их владельцев.
+static DISABLED: AtomicBool = AtomicBool::new(false);
+
+/// Включить или выключить показ иконок сторонних приложений.
+pub fn set_disabled(disabled: bool) {
+    DISABLED.store(disabled, Ordering::SeqCst);
+}
+
+/// Отключены ли иконки.
+pub fn disabled() -> bool {
+    DISABLED.load(Ordering::SeqCst)
+}
 
 /// Возможные пути к иконке внутри репозитория.
 fn candidates(slug: &str) -> Vec<String> {
@@ -25,6 +40,9 @@ pub fn cache_name(slug: &str) -> String {
 
 /// Скачать иконку репозитория и положить в локальный кэш.
 pub async fn ensure_icon(client: &Client, slug: &str, dir: &Path) -> Option<PathBuf> {
+    if disabled() {
+        return None;
+    }
     let _ = std::fs::create_dir_all(dir);
     let file = dir.join(cache_name(slug));
     if file.exists() && std::fs::metadata(&file).map(|m| m.len() > 0).unwrap_or(false) {

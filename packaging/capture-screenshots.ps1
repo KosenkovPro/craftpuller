@@ -109,31 +109,33 @@ Write-Host "Снимаю интерфейс CraftPull..."
 
 # 1. Обновление данных с GitHub: заодно наполняется кэш релизов.
 #    Этот кадр показывает журнал с реальными записями проверки.
-$app = Start-App @("--view", "list", "--tab", "logs", "--refresh")
+$app = Start-App @("--view", "list", "--tab", "logs", "--refresh", "--no-icons")
 Start-Sleep -Seconds 30
 Save-Shot $app.Hwnd "screenshot-log.png"
 Get-Process craftpull -ErrorAction SilentlyContinue | Stop-Process -Force
 Start-Sleep -Milliseconds 800
 
 # 2. Остальные кадры — из кэша, без обращения к сети.
-$app = Start-App @("--view", "list", "--no-refresh")
+#    --no-icons: чужие логотипы приложений не попадают в документацию.
+$app = Start-App @("--view", "list", "--no-refresh", "--no-icons")
 Start-Sleep -Seconds 4
 Save-Shot $app.Hwnd "screenshot-list.png"
 
-$app = Start-App @("--view", "grid", "--no-refresh")
+$app = Start-App @("--view", "grid", "--no-refresh", "--no-icons")
 Start-Sleep -Seconds 4
 Save-Shot $app.Hwnd "screenshot-grid.png"
 
 # 3. Карточка-герой: клик по плитке разворачивает её на всю ширину.
-$app = Start-App @("--view", "grid", "--hero", "storytold/pdfcraft", "--no-refresh")
+$app = Start-App @("--view", "grid", "--hero", "storytold/pdfcraft", "--no-refresh", "--no-icons")
 Start-Sleep -Seconds 4
 Save-Shot $app.Hwnd "screenshot-hero.png"
 
-$app = Start-App @("--view", "list", "--tab", "settings", "--no-refresh")
+$app = Start-App @("--view", "list", "--tab", "settings", "--no-refresh", "--no-icons")
 Start-Sleep -Seconds 4
 Save-Shot $app.Hwnd "screenshot-settings.png"
 
-$app = Start-App @("--view", "list", "--popup", "storytold/pdfcraft", "--no-refresh")
+# 4. Релизы: панель справа внутри страницы приложения.
+$app = Start-App @("--view", "list", "--popup", "storytold/pdfcraft", "--no-refresh", "--no-icons")
 Start-Sleep -Seconds 6
 Save-Shot $app.Hwnd "screenshot-releases.png"
 

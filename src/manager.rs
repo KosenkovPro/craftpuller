@@ -1,7 +1,7 @@
 //! Оркестратор: обновление репозиториев, загрузки, очистка старых версий.
 
 use crate::cache::Cache;
-use crate::config::{AssetFilter, Config, DownloadMode};
+use crate::config::{AssetKind, Config, DownloadMode};
 use crate::download::{task_id, Control, Downloader, RateLimiter, TaskRegistry};
 use crate::github;
 use crate::git;
@@ -11,7 +11,7 @@ use crate::storage;
 use reqwest::Client;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use tokio::sync::Semaphore;
 
@@ -23,8 +23,6 @@ pub const CACHE_TTL_SECONDS: i64 = 15 * 60;
 pub enum DownloadRequest {
     /// Последние релизы по включённым каналам (стабильный и/или нестабильный).
     Targets,
-    /// Конкретный тег релиза.
-    Tag(String),
     /// Явно выбранные пользователем файлы релиза.
     Assets(String, Vec<AssetInfo>),
 }
@@ -42,6 +40,78 @@ pub struct RepoRuntime {
     pub checking: bool,
 }
 
+/// Как проходит проверка репозитория.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CheckStatus {
+    /// Ждёт своей очереди.
+    Waiting,
+    /// Проверяется прямо сейчас.
+    Running,
+    /// Проверка прошла успешно.
+    Done,
+    /// Проверка закончилась ошибкой.
+    Failed,
+    /// Проверка не понадобилась: данные свежие.
+    Skipped,
+}
+
+/// Один пункт списка проверок.
+#[derive(Debug, Clone)]
+pub struct CheckItem {
+    pub slug: String,
+    pub status: CheckStatus,
+    /// Итог проверки: «10 релизов · 0.9 с».
+    pub detail: String,
+    pub error: Option<String>,
+}
+
+impl CheckItem {
+    fn new(slug: &str) -> Self {
+        Self {
+            slug: slug.to_string(),
+            status: CheckStatus::Waiting,
+            detail: String::new(),
+            error: None,
+        }
+    }
+}
+
+/// Сквозная проверка репозиториев: что готово, что проверяется, что в очереди.
+#[derive(Debug, Default, Clone)]
+pub struct CheckState {
+    pub running: bool,
+    pub items: Vec<CheckItem>,
+}
+
+impl CheckState {
+    /// Сколько всего репозиториев в проверке.
+    pub fn total(&self) -> usize {
+        self.items.len()
+    }
+
+    /// Сколько проверок уже закончилось.
+    pub fn done(&self) -> usize {
+        self.items
+            .iter()
+            .filter(|i| {
+                matches!(
+                    i.status,
+                    CheckStatus::Done | CheckStatus::Failed | CheckStatus::Skipped
+                )
+            })
+            .count()
+    }
+
+    /// Доля выполненных проверок.
+    pub fn fraction(&self) -> f32 {
+        if self.items.is_empty() {
+            0.0
+        } else {
+            self.done() as f32 / self.items.len() as f32
+        }
+    }
+}
+
 /// Общее состояние приложения.
 pub struct Shared {
     pub cfg: Mutex<Config>,
@@ -53,8 +123,12 @@ pub struct Shared {
     pub logs: Mutex<VecDeque<LogEntry>>,
     pub log_file: Mutex<Option<std::fs::File>>,
     pub busy: AtomicUsize,
+    /// Счётчик задач: по нему файлы выстраиваются в очередь загрузки.
+    pub next_seq: AtomicU64,
     /// Кэш релизов на диске: переживает перезапуск и бережёт лимит GitHub API.
     pub cache: Mutex<Cache>,
+    /// Список проверок: что проверено, что проверяется, что в очереди.
+    pub checks: Mutex<CheckState>,
     /// Ворота файлов: сколько файлов качается одновременно.
     pub file_gate: Mutex<Arc<Semaphore>>,
     /// Ворота репозиториев: сколько репозиториев качается одновременно.
@@ -238,7 +312,9 @@ impl AppState {
             logs: Mutex::new(VecDeque::new()),
             log_file: Mutex::new(log_file),
             busy: AtomicUsize::new(0),
+            next_seq: AtomicU64::new(1),
             cache: Mutex::new(cache),
+            checks: Mutex::new(CheckState::default()),
             file_gate: Mutex::new(Arc::new(Semaphore::new(gate_limit))),
             repo_gate: Mutex::new(Arc::new(Semaphore::new(gate_limit))),
         });
@@ -317,7 +393,9 @@ impl AppState {
     }
 
     /// Обновить список релизов и описание репозитория.
-    pub async fn refresh_repo(self: &Arc<Self>, slug: &str) {
+    ///
+    /// Возвращает число найденных релизов или текст ошибки.
+    pub async fn refresh_repo(self: &Arc<Self>, slug: &str) -> Result<usize, String> {
         self.shared.busy.fetch_add(1, Ordering::SeqCst);
         let mut rt = self
             .shared
@@ -329,13 +407,14 @@ impl AppState {
         rt.checking = true;
         self.shared.set_repo_runtime(rt.clone());
 
-        match github::list_releases(&self.shared.client, slug).await {
+        let result = match github::list_releases(&self.shared.client, slug).await {
             Ok(mut releases) => {
                 releases.sort_by(|a, b| {
                     b.published_at
                         .cmp(&a.published_at)
                         .then_with(|| b.tag.cmp(&a.tag))
                 });
+                let count = releases.len();
                 let (stable, edge) = split_channels(&releases);
                 rt.releases = releases;
                 rt.latest_stable = stable;
@@ -348,17 +427,19 @@ impl AppState {
                     LogLevel::Info,
                     crate::lang::tf(
                         "log.checked",
-                        &[("{slug}", slug), ("{n}", &rt.releases.len().to_string())],
+                        &[("{slug}", slug), ("{n}", &count.to_string())],
                     ),
                 );
+                Ok(count)
             }
             Err(e) => {
                 rt.last_error = Some(e.clone());
                 rt.checking = false;
                 self.shared.set_repo_runtime(rt);
                 self.shared.log(LogLevel::Error, format!("{slug}: {e}"));
+                Err(e)
             }
-        }
+        };
         self.shared.busy.fetch_sub(1, Ordering::SeqCst);
 
         // Описание подтягиваем только один раз, чтобы не тратить лимит API.
@@ -375,6 +456,54 @@ impl AppState {
                         rc.description = desc;
                     }
                     self.save_cfg(cfg);
+                }
+            }
+        }
+        result
+    }
+
+    /// Проверить один репозиторий и записать итог в список проверок.
+    async fn check_repo(self: &Arc<Self>, slug: &str) {
+        self.set_check_status(slug, CheckStatus::Running, "", None);
+        let started = std::time::Instant::now();
+        let result = self.refresh_repo(slug).await;
+        // Иконка — часть проверки: без неё карточка остаётся пустой.
+        let _ = self.ensure_icon(slug).await;
+        let secs = started.elapsed().as_secs_f64();
+        match result {
+            Ok(count) => {
+                let detail = crate::lang::tf(
+                    "check.done",
+                    &[
+                        ("{n}", &count.to_string()),
+                        ("{t}", &format!("{secs:.1}")),
+                    ],
+                );
+                self.set_check_status(slug, CheckStatus::Done, &detail, None);
+            }
+            Err(e) => {
+                let detail = crate::lang::tf("check.failed", &[("{t}", &format!("{secs:.1}"))]);
+                self.set_check_status(slug, CheckStatus::Failed, &detail, Some(e));
+            }
+        }
+    }
+
+    /// Обновить пункт списка проверок.
+    fn set_check_status(
+        &self,
+        slug: &str,
+        status: CheckStatus,
+        detail: &str,
+        error: Option<String>,
+    ) {
+        if let Ok(mut checks) = self.shared.checks.lock() {
+            if let Some(item) = checks.items.iter_mut().find(|i| i.slug == slug) {
+                item.status = status;
+                if !detail.is_empty() {
+                    item.detail = detail.to_string();
+                }
+                if error.is_some() {
+                    item.error = error;
                 }
             }
         }
@@ -399,16 +528,36 @@ impl AppState {
             );
             return;
         }
+
+        // Список проверок: сначала всё ждёт, потом пункты заполняются по мере работы.
+        {
+            let mut guard = self.shared.checks.lock().ok();
+            if let Some(checks) = guard.as_mut() {
+                checks.running = true;
+                checks.items = enabled.iter().map(|s| CheckItem::new(s)).collect();
+            }
+        }
+
         let mut joins = Vec::new();
         for slug in enabled {
             if !force && !self.is_stale(&slug) {
+                // Данные свежие — повторно не ходим на GitHub.
+                self.set_check_status(
+                    &slug,
+                    CheckStatus::Skipped,
+                    crate::lang::t("check.skipped"),
+                    None,
+                );
                 continue;
             }
             let me = self.clone();
-            joins.push(tokio::spawn(async move { me.refresh_repo(&slug).await }));
+            joins.push(tokio::spawn(async move { me.check_repo(&slug).await }));
         }
         for j in joins {
             let _ = j.await;
+        }
+        if let Ok(mut checks) = self.shared.checks.lock() {
+            checks.running = false;
         }
     }
 
@@ -487,7 +636,7 @@ impl AppState {
         let filter = cfg
             .repo(slug)
             .map(|r| r.filter)
-            .unwrap_or(AssetFilter::Portable);
+            .unwrap_or(AssetKind::Auto);
 
         let mut rt = self
             .shared
@@ -497,7 +646,7 @@ impl AppState {
                 ..Default::default()
             });
         if rt.releases.is_empty() {
-            self.refresh_repo(slug).await;
+            let _ = self.refresh_repo(slug).await;
             rt = self
                 .shared
                 .repo_runtime(slug)
@@ -512,14 +661,8 @@ impl AppState {
         match request {
             DownloadRequest::Targets => {
                 for target in self.plan_targets(slug) {
-                    let assets = select_assets(filter, &target);
+                    let assets = select_assets(slug, filter, &target);
                     plan.push((target, assets));
-                }
-            }
-            DownloadRequest::Tag(tag) => {
-                if let Some(rel) = rt.releases.iter().find(|r| r.tag == tag) {
-                    let assets = select_assets(filter, rel);
-                    plan.push((rel.clone(), assets));
                 }
             }
             DownloadRequest::Assets(tag, assets) => {
@@ -617,6 +760,7 @@ impl AppState {
                         control: self.shared.control.clone(),
                         tasks: self.shared.tasks.clone(),
                         verify_sha256: cfg.verify_sha256,
+                        seq: self.shared.next_seq.fetch_add(1, Ordering::SeqCst),
                     };
                     let id = task_id(slug, &tag, &asset.name);
                     let asset_clone = asset.clone();
@@ -667,6 +811,7 @@ impl AppState {
                         control: self.shared.control.clone(),
                         tasks: self.shared.tasks.clone(),
                         verify_sha256: cfg.verify_sha256,
+                        seq: self.shared.next_seq.fetch_add(1, Ordering::SeqCst),
                     };
                     let id = task_id(slug, &tag, &asset.name);
                     match dl.fetch(&id, slug, &tag, &asset, &dir).await {
@@ -884,93 +1029,177 @@ pub fn split_channels(releases: &[ReleaseInfo]) -> (Option<ReleaseInfo>, Option<
     (stable, edge)
 }
 
+/// Служебный файл релиза: подпись, контрольная сумма, манифест.
+///
+/// Такие файлы не являются сборками — в списке вариантов им не место.
+pub fn is_noise_asset(name: &str) -> bool {
+    let n = name.to_ascii_lowercase();
+    n.ends_with(".asc")
+        || n.ends_with(".sig")
+        || n.ends_with(".zsync")
+        || n.ends_with(".sha256")
+        || n.ends_with(".sha256sum")
+        || n.ends_with(".sha1")
+        || n.ends_with(".sha512")
+        || n.ends_with(".minisig")
+        || n.ends_with(".blockmap")
+        || n.ends_with(".json")
+        || n.ends_with(".txt")
+        || n.ends_with(".md")
+        || n.contains("sha256sum")
+        || n.contains("signing-key")
+}
+
+/// Определить вид файла по его имени.
+///
+/// Имена в релизах GitHub разные, поэтому смотрим и на расширение, и на
+/// упоминание системы в имени. Сборки не под x86_64 и служебные файлы
+/// отбрасываются: пользователю нужна одна конкретная сборка.
+pub fn asset_kind(name: &str) -> Option<AssetKind> {
+    let n = name.to_ascii_lowercase();
+    if is_noise_asset(&n) {
+        return None;
+    }
+    // Архитектура: интересует только x86_64.
+    if n.contains("arm64")
+        || n.contains("aarch64")
+        || n.contains("riscv64")
+        || n.contains("i386")
+        || n.contains("i686")
+    {
+        return None;
+    }
+    if n.contains("windows") || n.ends_with(".msi") || n.contains("setup.exe") {
+        if n.ends_with(".msi") {
+            return Some(AssetKind::WindowsMsi);
+        }
+        if n.contains("setup.exe") {
+            return Some(AssetKind::WindowsSetup);
+        }
+        if n.ends_with(".zip") {
+            return Some(AssetKind::WindowsPortable);
+        }
+        return Some(AssetKind::WindowsSetup);
+    }
+    if n.contains("linux") || n.contains("ubuntu") {
+        if n.ends_with(".appimage") {
+            return Some(AssetKind::LinuxAppImage);
+        }
+        if n.ends_with(".tar.gz") || n.ends_with(".tgz") {
+            return Some(AssetKind::LinuxTarGz);
+        }
+        if n.ends_with(".deb") {
+            return Some(AssetKind::LinuxDeb);
+        }
+        if n.ends_with(".rpm") {
+            return Some(AssetKind::LinuxRpm);
+        }
+    }
+    None
+}
+
+/// Основной продукт релиза: «pdfcraft-0.21.1-…», а не «pdfcraft-cli-0.21.1-…».
+pub fn main_product_prefix(slug: &str, tag: &str) -> String {
+    let short = slug.rsplit('/').next().unwrap_or(slug);
+    let ver = tag.trim_start_matches('v');
+    let version = match ver.find(|c: char| c.is_ascii_digit()) {
+        Some(i) => &ver[i..],
+        None => ver,
+    };
+    format!("{short}-{version}")
+}
+
+/// Файл релиза по виду: сначала основной продукт, потом любой подходящий.
+fn pick_asset(slug: &str, rel: &ReleaseInfo, kind: AssetKind) -> Vec<AssetInfo> {
+    let main = main_product_prefix(slug, &rel.tag);
+    for a in &rel.assets {
+        if asset_kind(&a.name) == Some(kind) && a.name.starts_with(&main) {
+            return vec![a.clone()];
+        }
+    }
+    for a in &rel.assets {
+        if asset_kind(&a.name) == Some(kind) {
+            return vec![a.clone()];
+        }
+    }
+    Vec::new()
+}
+
 /// Выбрать файлы релиза по правилу фильтра.
-pub fn select_assets(filter: AssetFilter, rel: &ReleaseInfo) -> Vec<AssetInfo> {
-    match filter {
-        AssetFilter::All => rel.assets.clone(),
-        AssetFilter::Source => vec![AssetInfo::source_zip(&rel.tag, rel.source_zip.clone())],
-        AssetFilter::Portable => portable_assets(rel),
+pub fn select_assets(slug: &str, kind: AssetKind, rel: &ReleaseInfo) -> Vec<AssetInfo> {
+    match kind {
+        AssetKind::All => rel.assets.clone(),
+        AssetKind::Source => vec![AssetInfo::source_zip(&rel.tag, rel.source_zip.clone())],
+        AssetKind::Auto => {
+            let k = os_default_kind(slug, rel);
+            if k == AssetKind::Source {
+                vec![AssetInfo::source_zip(&rel.tag, rel.source_zip.clone())]
+            } else {
+                pick_asset(slug, rel, k)
+            }
+        }
+        k => pick_asset(slug, rel, k),
     }
 }
 
-/// Portable-сборки: Windows x64 и Ubuntu x86_64.
-pub fn portable_assets(rel: &ReleaseInfo) -> Vec<AssetInfo> {
-    let mut out = Vec::new();
-    if let Some(a) = pick_windows(rel) {
-        out.push(a);
+/// Варианты файлов релиза для выпадающего списка: вид и сам файл.
+///
+/// Один вид — один вариант: если в релизе лежат две сборки одной системы,
+/// берём основной продукт, а не вспомогательный (CLI, веб).
+pub fn asset_options(slug: &str, rel: &ReleaseInfo) -> Vec<(AssetKind, AssetInfo)> {
+    let main = main_product_prefix(slug, &rel.tag);
+    let mut out: Vec<(AssetKind, AssetInfo)> = Vec::new();
+    let mut extra: Vec<(AssetKind, AssetInfo)> = Vec::new();
+    for a in &rel.assets {
+        let Some(k) = asset_kind(&a.name) else {
+            continue;
+        };
+        if k == AssetKind::Source {
+            continue;
+        }
+        if a.name.starts_with(&main) {
+            if !out.iter().any(|(kind, _)| *kind == k) {
+                out.push((k, a.clone()));
+            }
+        } else if !extra.iter().any(|(kind, _)| *kind == k) {
+            extra.push((k, a.clone()));
+        }
     }
-    if let Some(a) = pick_ubuntu(rel) {
-        out.push(a);
+    // Варианты основного продукта идут первыми, вспомогательные — после.
+    for (k, a) in extra {
+        if !out.iter().any(|(kind, _)| *kind == k) {
+            out.push((k, a));
+        }
     }
-    if out.is_empty() {
-        out.push(AssetInfo::source_zip(&rel.tag, rel.source_zip.clone()));
-    }
+    // Ставим варианты текущей ОС первыми — их чаще выбирают.
+    let preferred = AssetKind::for_current_os();
+    out.sort_by_key(|(k, _)| {
+        preferred
+            .iter()
+            .position(|p| p == k)
+            .unwrap_or(usize::MAX)
+    });
     out
 }
 
-/// Windows x64: portable zip → msi → setup.exe.
-fn pick_windows(rel: &ReleaseInfo) -> Option<AssetInfo> {
-    let mut best: Option<(i32, AssetInfo)> = None;
-    for a in &rel.assets {
-        let n = a.name.to_ascii_lowercase();
-        if n.contains("arm64") || n.contains("aarch64") {
-            continue;
-        }
-        let windows = n.contains("windows")
-            || n.ends_with(".msi")
-            || n.contains("-setup.exe")
-            || n.contains("_x64-setup.exe");
-        if !windows {
-            continue;
-        }
-        let x64 = n.contains("x64") || n.contains("x86_64") || n.contains("amd64");
-        if !x64 {
-            continue;
-        }
-        let score = if n.contains("portable") && n.ends_with(".zip") {
-            30
-        } else if n.ends_with(".msi") {
-            20
-        } else if n.contains("setup.exe") {
-            10
-        } else {
-            5
-        };
-        match &best {
-            Some((s, _)) if *s >= score => {}
-            _ => best = Some((score, a.clone())),
+/// Какой файл релиза подходит под текущую ОС.
+pub fn os_default_kind(slug: &str, rel: &ReleaseInfo) -> AssetKind {
+    let main = main_product_prefix(slug, &rel.tag);
+    for k in AssetKind::for_current_os() {
+        if rel
+            .assets
+            .iter()
+            .any(|a| a.name.starts_with(&main) && asset_kind(&a.name) == Some(*k))
+        {
+            return *k;
         }
     }
-    best.map(|(_, a)| a)
-}
-
-/// Ubuntu x86_64: AppImage → tar.gz → deb.
-fn pick_ubuntu(rel: &ReleaseInfo) -> Option<AssetInfo> {
-    let mut best: Option<(i32, AssetInfo)> = None;
-    for a in &rel.assets {
-        let n = a.name.to_ascii_lowercase();
-        if !n.contains("linux") {
-            continue;
-        }
-        let x64 = n.contains("x86_64") || n.contains("x64") || n.contains("amd64");
-        if !x64 {
-            continue;
-        }
-        let score = if n.ends_with(".appimage") {
-            30
-        } else if n.ends_with(".tar.gz") {
-            20
-        } else if n.ends_with(".deb") {
-            10
-        } else {
-            5
-        };
-        match &best {
-            Some((s, _)) if *s >= score => {}
-            _ => best = Some((score, a.clone())),
+    for k in AssetKind::for_current_os() {
+        if rel.assets.iter().any(|a| asset_kind(&a.name) == Some(*k)) {
+            return *k;
         }
     }
-    best.map(|(_, a)| a)
+    AssetKind::Source
 }
 
 /// Куда положить скачанное для репозитория.

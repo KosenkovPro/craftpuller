@@ -3,6 +3,9 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
+/// Сколько файлов можно качать одновременно — максимум.
+pub const MAX_PARALLEL: usize = 16;
+
 /// Список репозиториев, которые добавляются при первом запуске (ни один не выбран).
 pub const DEFAULT_REPOS: &[&str] = &[
     "storytold/pdfcraft",
@@ -26,40 +29,82 @@ pub const DEFAULT_REPOS: &[&str] = &[
     "storytold/craft-launcher",
 ];
 
-/// Правило выбора файлов релиза.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum AssetFilter {
-    /// Portable-сборки: Windows x64 (zip) и Ubuntu x86_64 (AppImage).
-    Portable,
-    /// Все файлы релиза.
-    All,
+/// Какой файл релиза скачивать.
+///
+/// Значение выбирается из реальных файлов релиза: приложение определяет вид
+/// файла по имени и подставляет нужный под текущую ОС.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum AssetKind {
+    /// Автоматически: файл под текущую ОС (по умолчанию).
+    #[default]
+    #[serde(alias = "Portable", alias = "Auto")]
+    Auto,
+    /// Windows: portable-архив (zip, без установщика).
+    WindowsPortable,
+    /// Windows: MSI-установщик.
+    WindowsMsi,
+    /// Windows: установщик setup.exe.
+    WindowsSetup,
+    /// Ubuntu: AppImage.
+    LinuxAppImage,
+    /// Ubuntu: tar.gz.
+    LinuxTarGz,
+    /// Ubuntu: deb.
+    LinuxDeb,
+    /// Ubuntu: rpm.
+    LinuxRpm,
     /// Только архив с исходниками.
     Source,
+    /// Все файлы релиза.
+    All,
 }
 
-impl AssetFilter {
+impl AssetKind {
     /// Подпись с учётом языка интерфейса.
     pub fn localized_label(self) -> &'static str {
         match self {
-            AssetFilter::Portable => crate::lang::t("filter.portable"),
-            AssetFilter::All => crate::lang::t("filter.all"),
-            AssetFilter::Source => crate::lang::t("filter.source"),
+            AssetKind::Auto => crate::lang::t("filter.auto"),
+            AssetKind::WindowsPortable => crate::lang::t("filter.windows_portable"),
+            AssetKind::WindowsMsi => crate::lang::t("filter.windows_msi"),
+            AssetKind::WindowsSetup => crate::lang::t("filter.windows_setup"),
+            AssetKind::LinuxAppImage => crate::lang::t("filter.linux_appimage"),
+            AssetKind::LinuxTarGz => crate::lang::t("filter.linux_targz"),
+            AssetKind::LinuxDeb => crate::lang::t("filter.linux_deb"),
+            AssetKind::LinuxRpm => crate::lang::t("filter.linux_rpm"),
+            AssetKind::Source => crate::lang::t("filter.source"),
+            AssetKind::All => crate::lang::t("filter.all"),
         }
     }
 
-    /// Короткая подпись — для карточки-героя.
-    pub fn short_label(self) -> &'static str {
+    /// Короткая метка ОС для списка вариантов.
+    pub fn badge(self) -> &'static str {
         match self {
-            AssetFilter::Portable => crate::lang::t("filter.portable_short"),
-            AssetFilter::All => crate::lang::t("filter.all_short"),
-            AssetFilter::Source => crate::lang::t("filter.source_short"),
+            AssetKind::WindowsPortable | AssetKind::WindowsMsi | AssetKind::WindowsSetup => "WIN",
+            AssetKind::LinuxAppImage | AssetKind::LinuxTarGz | AssetKind::LinuxDeb
+            | AssetKind::LinuxRpm => "LNX",
+            AssetKind::Source => "SRC",
+            _ => "···",
         }
     }
-}
 
-impl Default for AssetFilter {
-    fn default() -> Self {
-        AssetFilter::Portable
+    /// Виды файлов, подходящих под текущую ОС, в порядке предпочтения.
+    pub fn for_current_os() -> &'static [AssetKind] {
+        if cfg!(target_os = "windows") {
+            &[
+                AssetKind::WindowsPortable,
+                AssetKind::WindowsMsi,
+                AssetKind::WindowsSetup,
+            ]
+        } else if cfg!(target_os = "macos") {
+            &[]
+        } else {
+            &[
+                AssetKind::LinuxAppImage,
+                AssetKind::LinuxTarGz,
+                AssetKind::LinuxDeb,
+                AssetKind::LinuxRpm,
+            ]
+        }
     }
 }
 
@@ -115,7 +160,7 @@ pub struct RepoConfig {
     pub enabled: bool,
     /// Релизы, которые нельзя удалять автоматически.
     pub pinned: Vec<String>,
-    pub filter: AssetFilter,
+    pub filter: AssetKind,
     /// Дополнительно клонировать/обновлять исходники репозитория через git.
     pub clone_source: bool,
     /// Краткое описание (подтягивается с GitHub, можно править вручную).
@@ -130,7 +175,7 @@ impl RepoConfig {
             slug: slug.to_string(),
             enabled: false,
             pinned: Vec::new(),
-            filter: AssetFilter::Portable,
+            filter: AssetKind::Auto,
             clone_source: false,
             description: String::new(),
             icon: None,
@@ -185,10 +230,10 @@ impl Default for Config {
         Self {
             root_dir: default_root_dir(),
             speed_limit_kbps: 0,
-            max_parallel: 3,
+            max_parallel: 8,
             download_mode: DownloadMode::Parallel,
             stable_channel: true,
-            edge_channel: true,
+            edge_channel: false,
             verify_sha256: true,
             delete_old_versions: true,
             autostart: false,
@@ -271,6 +316,8 @@ impl Config {
         if self.max_parallel == 0 {
             self.max_parallel = 1;
         }
+        // Лимит параллельных загрузок — целое число в разумных пределах.
+        self.max_parallel = self.max_parallel.clamp(1, MAX_PARALLEL);
     }
 
     pub fn repo(&self, slug: &str) -> Option<&RepoConfig> {
@@ -359,7 +406,7 @@ pub struct RepoEntry {
     #[serde(default)]
     pub pinned: Vec<String>,
     #[serde(default)]
-    pub filter: AssetFilter,
+    pub filter: AssetKind,
     #[serde(default)]
     pub clone_source: bool,
 }

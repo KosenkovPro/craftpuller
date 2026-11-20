@@ -17,7 +17,7 @@ use egui::{
 use super::anim::{lerp, lerp_rect, shift, Spring};
 use super::repos::card_icon;
 use super::{theme, CraftApp};
-use crate::config::{AssetFilter, RepoConfig};
+use crate::config::{AssetKind, RepoConfig};
 use crate::lang::{t, tf};
 use crate::model::{
     human_date, human_size, InstalledVersion, LogLevel, ReleaseInfo, TaskProgress, TaskState,
@@ -27,7 +27,7 @@ use crate::storage;
 /// Высота плитки в свёрнутом виде.
 const TILE_H: f32 = 124.0;
 /// Высота раскрытой карточки.
-const HERO_H: f32 = 240.0;
+const HERO_H: f32 = 256.0;
 /// Зазор между карточками.
 const GAP: f32 = 14.0;
 /// Максимальная ширина плитки.
@@ -143,7 +143,7 @@ enum CardAction {
     OpenFolder(String),
     TogglePin(String),
     ToggleEnabled(String),
-    SetFilter(String, AssetFilter),
+    SetFilter(String, AssetKind),
     ToggleOpen(String),
     Close,
 }
@@ -163,7 +163,9 @@ struct CardData {
     last_check: Option<String>,
     last_error: Option<String>,
     tasks: Vec<TaskProgress>,
-    filter: AssetFilter,
+    filter: AssetKind,
+    /// Варианты файлов релиза: вид и подпись с размером.
+    asset_options: Vec<(AssetKind, String)>,
 }
 
 /// Раскладка одной группы репозиториев.
@@ -460,6 +462,27 @@ fn collect_data(app: &mut CraftApp, rc: &RepoConfig, ctx: &Context) -> CardData 
     let tex = card_icon(app, rc, ctx);
     let rt = app.state.shared.repo_runtime(&rc.slug);
     let tasks = app.tasks_for(&rc.slug);
+    // Варианты файлов: реальные файлы релиза, а не общие правила.
+    let asset_options = rt
+        .as_ref()
+        .and_then(|r| {
+            r.releases
+                .iter()
+                .find(|rel| !rel.is_edge())
+                .or_else(|| r.releases.first())
+        })
+        .map(|rel| {
+            crate::manager::asset_options(&rc.slug, rel)
+                .into_iter()
+                .map(|(k, a)| {
+                    (
+                        k,
+                        format!("{} · {}", k.localized_label(), human_size(a.size)),
+                    )
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
     CardData {
         slug: rc.slug.clone(),
         name: rc.short_name(),
@@ -475,6 +498,7 @@ fn collect_data(app: &mut CraftApp, rc: &RepoConfig, ctx: &Context) -> CardData 
         last_error: rt.as_ref().and_then(|r| r.last_error.clone()),
         tasks,
         filter: rc.filter,
+        asset_options,
     }
 }
 
@@ -582,20 +606,35 @@ fn draw_card(
     // --- Содержимое плитки: гаснет при раскрытии ---
     if prog < 0.995 {
         let alpha = ((1.0 - prog) / 0.55).clamp(0.0, 1.0);
-        let (text, color) = if !data.enabled {
-            (t("common.disabled").to_string(), theme::DIM)
-        } else if let Some(rel) = &data.stable {
-            (rel.tag.clone(), theme::OK)
+        // Идёт загрузка — в плитке только полоса и процент.
+        if let Some(task) = data.tasks.iter().find(|t| !t.state.is_finished()) {
+            let bar_rect = Rect::from_min_size(
+                Pos2::new(tile_origin.left() + 12.0, tile_origin.top() + 96.0),
+                Vec2::new((tile_origin.width() - 24.0).max(30.0), 17.0),
+            );
+            draw_bar(
+                &painter,
+                bar_rect,
+                task.fraction(),
+                with_alpha(super::progress::fill_color(task.state), alpha),
+                alpha,
+            );
         } else {
-            (t("repo.no_releases").to_string(), theme::DIM)
-        };
-        painter.text(
-            Pos2::new(tile_origin.center().x, tile_origin.top() + 100.0),
-            Align2::CENTER_CENTER,
-            text,
-            FontId::new(11.0, FontFamily::Proportional),
-            with_alpha(color, alpha),
-        );
+            let (text, color) = if !data.enabled {
+                (t("common.disabled").to_string(), theme::DIM)
+            } else if let Some(rel) = &data.stable {
+                (rel.tag.clone(), theme::OK)
+            } else {
+                (t("repo.no_releases").to_string(), theme::DIM)
+            };
+            painter.text(
+                Pos2::new(tile_origin.center().x, tile_origin.top() + 100.0),
+                Align2::CENTER_CENTER,
+                text,
+                FontId::new(11.0, FontFamily::Proportional),
+                with_alpha(color, alpha),
+            );
+        }
     }
 
     // --- Содержимое героя: проявляется ---
@@ -671,6 +710,9 @@ fn draw_icon(painter: &egui::Painter, data: &CardData, rect: Rect, prog: f32) {
 }
 
 /// Содержимое раскрытой карточки: метаданные, описание, каналы.
+///
+/// Строки идут друг за другом с запасом: русские надписи длиннее английских,
+/// и при абсолютных координатах они наезжали друг на друга.
 fn draw_hero_content(
     painter: &egui::Painter,
     data: &CardData,
@@ -682,8 +724,9 @@ fn draw_hero_content(
     // Дополнительные сведения проявляются во второй половине перехода —
     // иначе они наезжают на название, которое ещё перетекает.
     let alpha = ((prog - 0.40) / 0.60).clamp(0.0, 1.0);
+    let right_edge = rect.right() - 20.0;
 
-    // Строка метаданных: репозиторий, версия, дата.
+    // Строка метаданных: репозиторий, версия, дата, время проверки.
     // Держится рядом с названием и едет вместе с ним.
     let mut parts: Vec<String> = vec![data.slug.clone()];
     if let Some(rel) = &data.stable {
@@ -692,56 +735,51 @@ fn draw_hero_content(
     if let Some(date) = data.stable.as_ref().and_then(|r| r.published_at.clone()) {
         parts.push(human_date(&date));
     }
+    if let Some(checked) = &data.last_check {
+        parts.push(format!("{}: {checked}", t("repo.checked")));
+    }
+    let meta_font = FontId::new(12.0, FontFamily::Proportional);
+    let meta = elide(
+        painter,
+        &parts.join("  ·  "),
+        &meta_font,
+        (right_edge - name_left).max(60.0),
+    );
     painter.text(
         Pos2::new(name_left, name_mid + 26.0),
         Align2::LEFT_CENTER,
-        parts.join("  ·  "),
-        FontId::new(12.0, FontFamily::Proportional),
+        meta,
+        meta_font,
         with_alpha(theme::DIM, alpha),
     );
 
-    // Каналы: стабильный и нестабильный.
+    // Каналы: стабильный и нестабильный. Плашки ниже строки метаданных,
+    // иначе они наезжают на неё.
     let mut x = name_left;
     if let Some(rel) = &data.stable {
-        x += draw_chip(
+        let w = draw_chip(
             painter,
-            Vec2::new(x, name_mid + 31.0),
+            Vec2::new(x, name_mid + 46.0),
             t("popup.stable"),
             &rel.tag,
             theme::OK,
             alpha,
-        ) + 8.0;
+            right_edge,
+        );
+        if w <= 0.0 {
+            return;
+        }
+        x += w + 8.0;
     }
     if let Some(rel) = &data.edge {
         draw_chip(
             painter,
-            Vec2::new(x, name_mid + 31.0),
+            Vec2::new(x, name_mid + 46.0),
             t("popup.edge"),
             &rel.tag,
             theme::EDGE,
             alpha,
-        );
-    }
-
-    // Активная загрузка — справа от плашек.
-    if let Some(task) = data.tasks.iter().find(|t| !t.state.is_finished()) {
-        let label = format!(
-            "{}  ·  {}",
-            task.asset,
-            match task.state {
-                TaskState::Paused => t("status.paused").to_string(),
-                TaskState::Queued => "…".to_string(),
-                _ => human_size(task.speed as u64),
-            }
-        );
-        let font = FontId::new(11.0, FontFamily::Proportional);
-        let w = text_width(painter, &label, &font);
-        painter.text(
-            Pos2::new(rect.right() - 20.0 - w, name_mid + 40.0),
-            Align2::LEFT_CENTER,
-            label,
-            font,
-            with_alpha(theme::ACCENT, alpha),
+            right_edge,
         );
     }
 
@@ -755,7 +793,7 @@ fn draw_hero_content(
     let wrap = (rect.width() - 40.0).max(80.0);
     let galley = painter.layout(desc, desc_font, with_alpha(theme::TEXT, alpha), wrap);
     let desc_rect = Rect::from_min_size(
-        Pos2::new(rect.left() + 20.0, rect.top() + 130.0),
+        Pos2::new(rect.left() + 20.0, rect.top() + 134.0),
         Vec2::new(wrap, 36.0),
     );
     let clipped = painter.with_clip_rect(painter.clip_rect().intersect(desc_rect));
@@ -765,46 +803,65 @@ fn draw_hero_content(
         with_alpha(theme::TEXT, alpha),
     );
 
-    // Что уже скачано.
-    if !data.installed.is_empty() {
-        let text = data
+    // Нижняя строка: что уже скачано слева, активная загрузка справа.
+    let row_y = rect.top() + 182.0;
+    let small = FontId::new(11.0, FontFamily::Proportional);
+
+    // Справа — активная загрузка: резервируем под неё место.
+    let mut right_used = 0.0_f32;
+    if let Some(task) = data.tasks.iter().find(|t| !t.state.is_finished()) {
+        let label = format!(
+            "{}  ·  {}",
+            task.asset,
+            match task.state {
+                TaskState::Paused => t("status.paused").to_string(),
+                TaskState::Queued => "…".to_string(),
+                _ => crate::model::human_speed(task.speed),
+            }
+        );
+        let w = text_width(painter, &label, &small);
+        if right_edge - w - name_left > 120.0 {
+            painter.text(
+                Pos2::new(right_edge - w, row_y),
+                Align2::LEFT_CENTER,
+                label,
+                small.clone(),
+                with_alpha(theme::ACCENT, alpha),
+            );
+            right_used = w + 16.0;
+        }
+    }
+
+    // Слева — установленные версии или ошибка.
+    let max_left = (right_edge - right_used - (rect.left() + 20.0)).max(80.0);
+    let text = if let Some(err) = &data.last_error {
+        Some((format!("! {err}"), theme::DANGER))
+    } else if !data.installed.is_empty() {
+        let joined = data
             .installed
             .iter()
             .map(|v| format!("{} · {}", v.tag, human_size(v.size)))
             .collect::<Vec<_>>()
             .join("   ");
+        Some((joined, theme::DIM))
+    } else {
+        None
+    };
+    if let Some((text, color)) = text {
+        let trimmed = elide(painter, &text, &small, max_left);
         painter.text(
-            Pos2::new(rect.left() + 20.0, rect.top() + 176.0),
+            Pos2::new(rect.left() + 20.0, row_y),
             Align2::LEFT_CENTER,
-            text,
-            FontId::new(11.0, FontFamily::Proportional),
-            with_alpha(theme::DIM, alpha),
-        );
-    }
-    if let Some(err) = &data.last_error {
-        painter.text(
-            Pos2::new(rect.left() + 20.0, rect.top() + 176.0),
-            Align2::LEFT_CENTER,
-            format!("! {err}"),
-            FontId::new(11.0, FontFamily::Proportional),
-            with_alpha(theme::DANGER, alpha),
-        );
-    }
-    if let Some(checked) = &data.last_check {
-        let font = FontId::new(10.5, FontFamily::Proportional);
-        let text = format!("{}: {checked}", t("repo.checked"));
-        let w = text_width(painter, &text, &font);
-        painter.text(
-            Pos2::new(rect.right() - 20.0 - w, rect.top() + 176.0),
-            Align2::LEFT_CENTER,
-            text,
-            font,
-            with_alpha(theme::DIM, alpha),
+            trimmed,
+            small,
+            with_alpha(color, alpha),
         );
     }
 }
 
 /// Плашка канала: «stable v1.2.3». Возвращает занятую ширину.
+///
+/// Если плашка не помещается до `max_right`, она не рисуется и возвращает 0.
 fn draw_chip(
     painter: &egui::Painter,
     pos: Vec2,
@@ -812,12 +869,16 @@ fn draw_chip(
     tag: &str,
     color: Color32,
     alpha: f32,
+    max_right: f32,
 ) -> f32 {
     let f1 = FontId::new(10.0, FontFamily::Proportional);
     let f2 = FontId::new(11.0, FontFamily::Proportional);
     let w1 = text_width(painter, title, &f1);
     let w2 = text_width(painter, tag, &f2);
     let w = w1 + 6.0 + w2 + 18.0;
+    if pos.x + w > max_right {
+        return 0.0;
+    }
     let rect = Rect::from_min_size(Pos2::new(pos.x, pos.y), Vec2::new(w, 18.0));
     painter.rect_filled(rect, corner(9.0), with_alpha(color, 0.15 * alpha));
     painter.rect_stroke(
@@ -843,6 +904,61 @@ fn draw_chip(
     w
 }
 
+/// Полоса прогресса с процентом по центру — для карточки-героя.
+fn draw_bar(painter: &egui::Painter, rect: Rect, frac: f32, color: Color32, alpha: f32) {
+    let frac = frac.clamp(0.0, 1.0);
+    let radius = egui::CornerRadius::same((rect.height() / 2.0).round().clamp(2.0, 12.0) as u8);
+    painter.rect_filled(rect, radius, theme::BG);
+    let fill_w = rect.width() * frac;
+    if fill_w > 1.0 {
+        let fill_rect = egui::Rect::from_min_max(
+            rect.left_top(),
+            egui::pos2(rect.left() + fill_w, rect.bottom()),
+        );
+        painter.rect_filled(fill_rect, radius, color);
+    }
+    let text = format!("{}%", (frac * 100.0).round() as u32);
+    let font = FontId::new(10.5, FontFamily::Proportional);
+    for (dx, dy) in [(-1.0, 0.0), (1.0, 0.0), (0.0, -1.0), (0.0, 1.0)] {
+        painter.text(
+            rect.center() + egui::vec2(dx, dy),
+            Align2::CENTER_CENTER,
+            text.clone(),
+            font.clone(),
+            Color32::from_black_alpha(190),
+        );
+    }
+    painter.text(
+        rect.center(),
+        Align2::CENTER_CENTER,
+        text,
+        font,
+        with_alpha(Color32::WHITE, alpha),
+    );
+}
+
+/// Обрезать строку по ширине, добавив многоточие.
+fn elide(painter: &egui::Painter, text: &str, font: &FontId, max_w: f32) -> String {
+    if max_w <= 0.0 {
+        return String::new();
+    }
+    if text_width(painter, text, font) <= max_w {
+        return text.to_string();
+    }
+    let mut out = String::new();
+    let mut w = 0.0_f32;
+    for c in text.chars() {
+        let cw = painter.fonts(|f| f.glyph_width(font, c));
+        if w + cw > max_w - 10.0 {
+            break;
+        }
+        out.push(c);
+        w += cw;
+    }
+    out.push('…');
+    out
+}
+
 /// Кнопки раскрытой карточки.
 fn draw_hero_buttons(
     ui: &mut egui::Ui,
@@ -852,7 +968,7 @@ fn draw_hero_buttons(
     actions: &mut Vec<CardAction>,
 ) {
     let alpha = ((prog - 0.40) / 0.60).clamp(0.0, 1.0);
-    let top = rect.top() + 190.0;
+    let top = rect.top() + 208.0;
     let mut x = rect.left() + 20.0;
 
     // Главная кнопка «Скачать».
@@ -957,18 +1073,19 @@ fn draw_hero_buttons(
         actions.push(CardAction::TogglePin(data.slug.clone()));
     }
 
-    // Выбор файлов — справа от кнопок.
-    let combo_w = 132.0_f32;
+    // Выбор файлов — справа от кнопок: реальные файлы релиза,
+    // по умолчанию — вариант под текущую ОС.
+    let combo_w = 230.0_f32;
     let combo_left = rect.right() - 20.0 - combo_w;
     let combo_rect = Rect::from_min_size(
-        Pos2::new(combo_left, rect.top() + 160.0),
+        Pos2::new(combo_left, top),
         Vec2::new(combo_w, 28.0),
     );
     let label = t("repo.filter");
     let label_font = FontId::new(11.5, FontFamily::Proportional);
     let label_w = text_width(ui.painter(), label, &label_font);
     ui.painter().text(
-        Pos2::new(combo_left - label_w - 10.0, rect.top() + 174.0),
+        Pos2::new(combo_left - label_w - 10.0, top + 14.0),
         Align2::LEFT_CENTER,
         label,
         label_font,
@@ -979,16 +1096,32 @@ fn draw_hero_buttons(
     ui.scope_builder(egui::UiBuilder::new().max_rect(combo_rect), |ui| {
         ui.set_style(faded_style(ui.style(), alpha));
         let combo = egui::ComboBox::from_id_salt(("hero_filter", data.slug.as_str()))
-            .selected_text(filter.short_label())
+            .selected_text(filter.localized_label())
             .width(combo_w)
             .show_ui(ui, |ui| {
-                for f in [
-                    AssetFilter::Portable,
-                    AssetFilter::All,
-                    AssetFilter::Source,
-                ] {
-                    ui.selectable_value(&mut filter, f, f.localized_label());
+                ui.selectable_value(
+                    &mut filter,
+                    AssetKind::Auto,
+                    format!(
+                        "{} · {}",
+                        AssetKind::Auto.localized_label(),
+                        t("filter.auto_hint")
+                    ),
+                );
+                for (k, text) in &data.asset_options {
+                    ui.selectable_value(&mut filter, *k, text.clone());
                 }
+                ui.separator();
+                ui.selectable_value(
+                    &mut filter,
+                    AssetKind::Source,
+                    AssetKind::Source.localized_label(),
+                );
+                ui.selectable_value(
+                    &mut filter,
+                    AssetKind::All,
+                    AssetKind::All.localized_label(),
+                );
             });
         changed = combo.response.changed();
     });
@@ -1032,21 +1165,7 @@ fn apply_action(app: &mut CraftApp, action: CardAction) {
             app.notify(tf("repo.download_started", &[("{s}", &slug)]), LogLevel::Info);
         }
         CardAction::Releases(slug) => {
-            let pinned = app
-                .state
-                .cfg()
-                .repo(&slug)
-                .map(|r| r.pinned.clone())
-                .unwrap_or_default();
-            if let Some(rt) = app.state.shared.repo_runtime(&slug) {
-                app.popup = Some(super::ReleasePopup {
-                    slug: slug.clone(),
-                    releases: rt.releases.clone(),
-                    pinned,
-                });
-                app.popup_expanded = None;
-                app.popup_assets.clear();
-            }
+            app.open_releases(&slug);
         }
         CardAction::OpenFolder(slug) => {
             let cfg = app.state.cfg();

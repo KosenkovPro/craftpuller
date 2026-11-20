@@ -82,6 +82,12 @@ fn main() {
 }
 
 fn run(args: &[String]) -> Result<(), String> {
+    // Без иконок сторонних приложений: чужие логотипы не должны попасть
+    // ни в репозиторий, ни на скриншоты документации.
+    if args.iter().any(|a| a == "--no-icons") {
+        crate::icons::set_disabled(true);
+    }
+
     let rt = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .worker_threads(4)
@@ -101,7 +107,7 @@ fn run(args: &[String]) -> Result<(), String> {
         println!("CraftPull: self-test of {slug}…");
         let started = std::time::Instant::now();
         rt.block_on(async {
-            state.refresh_repo(&slug).await;
+            let _ = state.refresh_repo(&slug).await;
             // Лимит ставим после проверки: обновление описания перечитывает его из настроек.
             state.shared.limiter.set_limit(4 * 1024 * 1024);
             state
@@ -170,6 +176,16 @@ fn run(args: &[String]) -> Result<(), String> {
         hero: hero_arg.clone(),
     };
 
+    // Скачать конкретный репозиторий сразу при запуске.
+    if let Some(slug) = arg_value(args, "--download") {
+        let st = state.clone();
+        let handle = st.handle.clone();
+        handle.spawn(async move {
+            st.download_fresh(&slug, manager::DownloadRequest::Targets)
+                .await;
+        });
+    }
+
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("CraftPull")
@@ -205,8 +221,10 @@ fn print_help() {
          craftpull --selftest [owner/repo] — check the download pipeline without a window\n  \
          craftpull --tab <repos|settings|logs> — open a specific tab\n  \
          craftpull --view <grid|list|light> — open a specific view mode\n  \
-         craftpull --popup <owner/repo> — open the releases window of a repository\n  \
+         craftpull --popup <owner/repo> — open the release list of a repository\n  \
          craftpull --hero <owner/repo> — open the grid with that card expanded\n  \
+         craftpull --download <owner/repo> — start downloading that repository\n  \
+         craftpull --no-icons    — do not load third-party application icons\n  \
          craftpull --no-refresh     — do not contact GitHub on start, use the cache\n  \
          craftpull --refresh        — refresh the repositories even if the cache is fresh\n  \
          craftpull --version       — show the version",

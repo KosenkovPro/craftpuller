@@ -3,14 +3,16 @@
 pub mod anim;
 pub mod hero;
 pub mod logs;
+pub mod progress;
+pub mod releases;
 pub mod repos;
 pub mod settings;
 pub mod theme;
 
 use crate::icon::IconKind;
 use crate::lang::{t, tf};
-use crate::manager::{AppState, DownloadRequest};
-use crate::model::{human_date, human_size, AssetInfo, LogLevel, ReleaseInfo, TaskProgress};
+use crate::manager::AppState;
+use crate::model::{human_size, LogLevel, TaskProgress};
 use crate::tray;
 use egui::{self, Context, TextureHandle};
 use std::collections::{HashMap, HashSet};
@@ -22,14 +24,6 @@ pub enum Tab {
     Repos,
     Settings,
     Logs,
-}
-
-/// Данные всплывающего окна со списком релизов.
-#[derive(Clone)]
-pub struct ReleasePopup {
-    pub slug: String,
-    pub releases: Vec<ReleaseInfo>,
-    pub pinned: Vec<String>,
 }
 
 /// Параметры запуска окна.
@@ -53,11 +47,12 @@ pub struct CraftApp {
     pub state: Arc<AppState>,
     pub tab: Tab,
     pub tray: Option<tray::Tray>,
-    pub popup: Option<ReleasePopup>,
-    /// Развёрнутый релиз в окне релизов.
-    pub popup_expanded: Option<String>,
-    /// Отмеченные файлы в окне релизов.
-    pub popup_assets: HashSet<String>,
+    /// Репозиторий, у которого открыт список релизов (панель справа).
+    pub releases_open: Option<String>,
+    /// Раскрытый релиз внутри списка.
+    pub release_expanded: Option<String>,
+    /// Отмеченные файлы: «тег::имя файла».
+    pub selected_assets: HashSet<String>,
     /// Кэш загруженных иконок.
     pub icons: HashMap<String, TextureHandle>,
     /// Иконка самого приложения — заглушка для репозиториев без иконки.
@@ -69,7 +64,7 @@ pub struct CraftApp {
     pub hide_on_start: bool,
     /// Вкладка, которую нужно открыть при старте.
     pub start_tab: Option<Tab>,
-    /// Репозиторий, окно релизов которого нужно открыть при старте.
+    /// Репозиторий, список релизов которого нужно открыть при старте.
     pub startup_popup: Option<String>,
     /// Состояние карточки-героя в режиме сетки.
     pub hero: hero::HeroState,
@@ -114,9 +109,9 @@ impl CraftApp {
             state,
             tab: Tab::Repos,
             tray,
-            popup: None,
-            popup_expanded: None,
-            popup_assets: HashSet::new(),
+            releases_open: None,
+            release_expanded: None,
+            selected_assets: HashSet::new(),
             icons: HashMap::new(),
             app_icon: None,
             new_repo: String::new(),
@@ -199,6 +194,9 @@ impl CraftApp {
 
     /// Загрузить (и закешировать) иконку репозитория.
     pub fn icon_texture(&mut self, ctx: &Context, slug: &str, path: &str) -> Option<TextureHandle> {
+        if crate::icons::disabled() {
+            return None;
+        }
         if let Some(tex) = self.icons.get(slug) {
             return Some(tex.clone());
         }
@@ -267,12 +265,25 @@ impl eframe::App for CraftApp {
             ctx.request_repaint();
         }
 
+        // То же самое для проверки репозиториев: список проверок должен
+        // обновляться на глазах.
+        let checking = self
+            .state
+            .shared
+            .checks
+            .lock()
+            .map(|c| c.running)
+            .unwrap_or(false);
+        if checking {
+            ctx.request_repaint();
+        }
+
         // Нужная вкладка при запуске.
         if let Some(tab) = self.start_tab.take() {
             self.tab = tab;
         }
 
-        // Окно релизов по запросу (данные могут подгрузиться не сразу).
+        // Список релизов по запросу (данные могут подгрузиться не сразу).
         if let Some(slug) = self.startup_popup.clone() {
             let runtime = self.state.shared.repo_runtime(&slug);
             let releases = runtime
@@ -282,22 +293,8 @@ impl eframe::App for CraftApp {
                 .or_else(|| self.state.cached_releases(&slug))
                 .unwrap_or_default();
             if !releases.is_empty() {
-                let pinned = self
-                    .state
-                    .cfg()
-                    .repo(&slug)
-                    .map(|r| r.pinned.clone())
-                    .unwrap_or_default();
-                self.popup_expanded = runtime
-                    .as_ref()
-                    .and_then(|rt| rt.latest_stable.as_ref())
-                    .map(|r| r.tag.clone())
-                    .or_else(|| releases.first().map(|r| r.tag.clone()));
-                self.popup = Some(ReleasePopup {
-                    slug: slug.clone(),
-                    releases,
-                    pinned,
-                });
+                self.releases_open = Some(slug.clone());
+                releases::preselect(self, &slug, &releases);
                 self.startup_popup = None;
             }
         }
@@ -441,15 +438,18 @@ impl eframe::App for CraftApp {
                 });
             });
 
+        // Панель релизов справа — внутри страницы приложения.
+        // Показываем до основной панели: иначе она накроет её собой.
+        if self.tab == Tab::Repos {
+            self.show_releases_panel(ctx);
+        }
+
         // Основная панель.
         egui::CentralPanel::default().show(ctx, |ui| match self.tab {
             Tab::Repos => repos::show(ui, self, ctx),
             Tab::Settings => settings::show(ui, self),
             Tab::Logs => logs::show(ui, self),
         });
-
-        // Окно со списком релизов.
-        self.show_release_popup(ctx);
 
         // Всплывающее уведомление.
         if let Some((text, level, at)) = self.toast.clone() {
@@ -489,12 +489,32 @@ impl CraftApp {
     fn status_chip(&mut self, ui: &mut egui::Ui) {
         let paused = self.state.shared.control.is_paused();
         let busy = self.state.shared.is_busy();
-        let (text, color) = if paused {
-            (t("status.paused"), theme::WARN)
+        // Идёт проверка репозиториев — показываем, сколько уже проверено.
+        let checks = self
+            .state
+            .shared
+            .checks
+            .lock()
+            .ok()
+            .map(|c| (c.running, c.done(), c.total()))
+            .unwrap_or((false, 0, 0));
+        let (text, color): (String, egui::Color32) = if paused {
+            (t("status.paused").to_string(), theme::WARN)
+        } else if checks.0 {
+            (
+                tf(
+                    "status.checking",
+                    &[
+                        ("{n}", &checks.1.to_string()),
+                        ("{m}", &checks.2.to_string()),
+                    ],
+                ),
+                theme::ACCENT,
+            )
         } else if busy {
-            (t("status.downloading"), theme::OK)
+            (t("status.downloading").to_string(), theme::OK)
         } else {
-            (t("status.ready"), theme::DIM)
+            (t("status.ready").to_string(), theme::DIM)
         };
         let (speed, total, done) = self.progress_summary();
         let active = self
@@ -542,268 +562,94 @@ impl CraftApp {
 
     /// Активные задачи по репозиторию.
     pub fn tasks_for(&self, slug: &str) -> Vec<TaskProgress> {
-        match self.state.shared.tasks.try_lock() {
+        let list: Vec<TaskProgress> = match self.state.shared.tasks.try_lock() {
             Ok(guard) => guard
                 .values()
                 .filter(|t| t.repo == slug)
                 .cloned()
                 .collect(),
             Err(_) => Vec::new(),
-        }
+        };
+        with_queue(list)
     }
 
     /// Все задачи загрузки: активные и завершённые.
     pub fn tasks(&self) -> Vec<TaskProgress> {
-        match self.state.shared.tasks.try_lock() {
+        let list: Vec<TaskProgress> = match self.state.shared.tasks.try_lock() {
             Ok(guard) => guard.values().cloned().collect(),
             Err(_) => Vec::new(),
+        };
+        with_queue(list)
+    }
+
+    /// Открыть список релизов репозитория (панель справа).
+    pub fn open_releases(&mut self, slug: &str) {
+        let releases = self
+            .state
+            .shared
+            .repo_runtime(slug)
+            .map(|rt| rt.releases.clone())
+            .unwrap_or_default();
+        self.releases_open = Some(slug.to_string());
+        self.release_expanded = None;
+        self.selected_assets.clear();
+        releases::preselect(self, slug, &releases);
+        // Релизов ещё нет — подтягиваем их с GitHub.
+        if releases.is_empty() {
+            let st = self.state.clone();
+            let handle = st.handle.clone();
+            let slug_c = slug.to_string();
+            handle.spawn(async move {
+                let _ = st.refresh_repo(&slug_c).await;
+            });
         }
     }
 
-    fn show_release_popup(&mut self, ctx: &Context) {
-        let Some(popup) = self.popup.clone() else {
+    /// Панель релизов справа — внутри страницы приложения.
+    fn show_releases_panel(&mut self, ctx: &Context) {
+        let Some(slug) = self.releases_open.clone() else {
             return;
         };
-        let mut open = true;
-        let mut actions: Vec<PopupAction> = Vec::new();
-
-        egui::Window::new(tf("popup.title", &[("{s}", &popup.slug)]))
-            .open(&mut open)
-            .default_width(680.0)
-            .default_height(520.0)
+        let releases = self
+            .state
+            .shared
+            .repo_runtime(&slug)
+            .map(|rt| rt.releases.clone())
+            .unwrap_or_default();
+        // Данные подгрузились позже — отмечаем файл под текущую ОС.
+        if !releases.is_empty() && self.selected_assets.is_empty() {
+            releases::preselect(self, &slug, &releases);
+        }
+        egui::SidePanel::right("releases")
+            .exact_width(430.0)
             .resizable(true)
+            .frame(
+                egui::Frame::new()
+                    .fill(theme::PANEL)
+                    .inner_margin(egui::Margin::same(12))
+                    .stroke(egui::Stroke::NONE),
+            )
             .show(ctx, |ui| {
-                egui::ScrollArea::vertical().show(ui, |ui| {
-                    for rel in &popup.releases {
-                        let pinned = popup.pinned.iter().any(|p| p == &rel.tag);
-                        let expanded = self.popup_expanded.as_deref() == Some(rel.tag.as_str());
-                        egui::Frame::new()
-                            .fill(theme::CARD)
-                            .corner_radius(egui::CornerRadius::same(10))
-                            .stroke(egui::Stroke::new(
-                                1.0_f32,
-                                if rel.is_edge() {
-                                    theme::EDGE
-                                } else {
-                                    theme::BORDER
-                                },
-                            ))
-                            .inner_margin(egui::Margin::same(10))
-                            .show(ui, |ui| {
-                                ui.horizontal(|ui| {
-                                    if ui
-                                        .button(if expanded { "v" } else { ">" })
-                                        .on_hover_text(t("popup.assets"))
-                                        .clicked()
-                                    {
-                                        actions.push(PopupAction::Expand(rel.tag.clone()));
-                                    }
-                                    ui.label(egui::RichText::new(&rel.tag).strong());
-                                    ui.label(
-                                        egui::RichText::new(if rel.is_edge() {
-                                            t("popup.edge")
-                                        } else {
-                                            t("popup.stable")
-                                        })
-                                        .size(10.0)
-                                        .color(if rel.is_edge() {
-                                            theme::EDGE
-                                        } else {
-                                            theme::OK
-                                        }),
-                                    );
-                                    if let Some(date) = &rel.published_at {
-                                        ui.label(
-                                            egui::RichText::new(human_date(date))
-                                                .size(11.0)
-                                                .color(theme::DIM),
-                                        );
-                                    }
-                                    ui.with_layout(
-                                        egui::Layout::right_to_left(egui::Align::Center),
-                                        |ui| {
-                                            let pin_text = if pinned {
-                                                t("common.unpin")
-                                            } else {
-                                                t("common.pin")
-                                            };
-                                            if ui.button(pin_text).clicked() {
-                                                actions.push(PopupAction::TogglePin(
-                                                    popup.slug.clone(),
-                                                    rel.tag.clone(),
-                                                ));
-                                            }
-                                            if ui.button(t("common.download")).clicked() {
-                                                actions.push(PopupAction::DownloadTag(
-                                                    popup.slug.clone(),
-                                                    rel.tag.clone(),
-                                                ));
-                                            }
-                                        },
-                                    );
-                                });
-
-                                if expanded {
-                                    ui.separator();
-                                    ui.label(
-                                        egui::RichText::new(t("popup.assets"))
-                                            .size(11.5)
-                                            .color(theme::DIM),
-                                    );
-                                    for asset in &rel.assets {
-                                        let key = format!("{}::{}", rel.tag, asset.name);
-                                        let mut checked = self.popup_assets.contains(&key);
-                                        ui.horizontal(|ui| {
-                                            if ui.checkbox(&mut checked, "").changed() {
-                                                actions.push(PopupAction::ToggleAsset(key.clone()));
-                                            }
-                                            ui.label(
-                                                egui::RichText::new(&asset.name).size(11.5),
-                                            );
-                                            ui.label(
-                                                egui::RichText::new(human_size(asset.size))
-                                                    .size(10.5)
-                                                    .color(theme::DIM),
-                                            );
-                                        });
-                                    }
-                                    ui.horizontal(|ui| {
-                                        let selected = self
-                                            .popup_assets
-                                            .iter()
-                                            .filter(|k| k.starts_with(&format!("{}::", rel.tag)))
-                                            .count();
-                                        ui.label(
-                                            egui::RichText::new(tf(
-                                                "popup.selected",
-                                                &[("{n}", &selected.to_string())],
-                                            ))
-                                            .size(11.0)
-                                            .color(theme::DIM),
-                                        );
-                                        if ui.button(t("popup.download_selected")).clicked() {
-                                            actions.push(PopupAction::DownloadAssets(
-                                                popup.slug.clone(),
-                                                rel.tag.clone(),
-                                            ));
-                                        }
-                                        if ui.button(t("popup.download_all")).clicked() {
-                                            actions.push(PopupAction::DownloadEveryFile(
-                                                popup.slug.clone(),
-                                                rel.tag.clone(),
-                                            ));
-                                        }
-                                    });
-                                }
-                            });
-                        ui.add_space(6.0);
-                    }
-                });
+                releases::panel(ui, self, &slug, &releases);
             });
-
-        if !open {
-            self.popup = None;
-            self.popup_assets.clear();
-        }
-        for action in actions {
-            match action {
-                PopupAction::Expand(tag) => {
-                    if self.popup_expanded.as_deref() == Some(tag.as_str()) {
-                        self.popup_expanded = None;
-                    } else {
-                        self.popup_expanded = Some(tag);
-                    }
-                }
-                PopupAction::ToggleAsset(key) => {
-                    if !self.popup_assets.remove(&key) {
-                        self.popup_assets.insert(key);
-                    }
-                }
-                PopupAction::TogglePin(slug, tag) => {
-                    let mut cfg = self.state.cfg();
-                    if let Some(rc) = cfg.repo_mut(&slug) {
-                        if let Some(pos) = rc.pinned.iter().position(|p| p == &tag) {
-                            rc.pinned.remove(pos);
-                        } else {
-                            rc.pinned.push(tag.clone());
-                        }
-                    }
-                    self.state.save_cfg(cfg.clone());
-                    if let Some(p) = &mut self.popup {
-                        p.pinned = cfg
-                            .repo(&slug)
-                            .map(|r| r.pinned.clone())
-                            .unwrap_or_default();
-                    }
-                    self.notify(t("notify.pin_changed"), LogLevel::Ok);
-                }
-                PopupAction::DownloadTag(slug, tag) => {
-                    let st = self.state.clone();
-                    let handle = st.handle.clone();
-                    let slug_c = slug.clone();
-                    handle.spawn(async move {
-                        st.download_fresh(&slug_c, DownloadRequest::Tag(tag.clone()))
-                            .await
-                    });
-                    self.notify(tf("repo.download_started", &[("{s}", &slug)]), LogLevel::Info);
-                }
-                PopupAction::DownloadAssets(slug, tag) => {
-                    let assets: Vec<AssetInfo> = self
-                        .popup_assets
-                        .iter()
-                        .filter_map(|k| k.strip_prefix(&format!("{tag}::")))
-                        .filter_map(|name| {
-                            let rel = self
-                                .popup
-                                .as_ref()?
-                                .releases
-                                .iter()
-                                .find(|r| r.tag == tag)?;
-                            rel.assets.iter().find(|a| &a.name == name).cloned()
-                        })
-                        .collect();
-                    if assets.is_empty() {
-                        self.notify(t("notify.err").replace("{e}", "no files selected"), LogLevel::Warn);
-                        continue;
-                    }
-                    let st = self.state.clone();
-                    let handle = st.handle.clone();
-                    let slug_c = slug.clone();
-                    handle.spawn(async move {
-                        st.download_fresh(&slug_c, DownloadRequest::Assets(tag.clone(), assets.clone()))
-                            .await
-                    });
-                    self.notify(tf("repo.download_started", &[("{s}", &slug)]), LogLevel::Info);
-                }
-                PopupAction::DownloadEveryFile(slug, tag) => {
-                    let assets: Vec<AssetInfo> = self
-                        .popup
-                        .as_ref()
-                        .and_then(|p| p.releases.iter().find(|r| r.tag == tag))
-                        .map(|r| r.assets.clone())
-                        .unwrap_or_default();
-                    if assets.is_empty() {
-                        continue;
-                    }
-                    let st = self.state.clone();
-                    let handle = st.handle.clone();
-                    let slug_c = slug.clone();
-                    handle.spawn(async move {
-                        st.download_fresh(&slug_c, DownloadRequest::Assets(tag.clone(), assets.clone()))
-                            .await
-                    });
-                    self.notify(tf("repo.download_started", &[("{s}", &slug)]), LogLevel::Info);
-                }
-            }
-        }
     }
 }
 
-enum PopupAction {
-    Expand(String),
-    ToggleAsset(String),
-    TogglePin(String, String),
-    DownloadTag(String, String),
-    DownloadAssets(String, String),
-    DownloadEveryFile(String, String),
+/// Проставить номера очереди: активные задачи по порядку постановки в очередь.
+fn with_queue(mut list: Vec<TaskProgress>) -> Vec<TaskProgress> {
+    let mut active: Vec<usize> = list
+        .iter()
+        .enumerate()
+        .filter(|(_, t)| !t.state.is_finished())
+        .map(|(i, _)| i)
+        .collect();
+    active.sort_by_key(|i| (list[*i].started_at, list[*i].seq));
+    let total = active.len();
+    for (pos, idx) in active.into_iter().enumerate() {
+        list[idx].queue = pos + 1;
+        list[idx].queue_total = total;
+    }
+    list
 }
+
+

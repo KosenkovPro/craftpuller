@@ -40,16 +40,35 @@ API quota is exhausted.
 ## Screenshots
 
 **Repository list** — icons pulled from the repositories themselves, descriptions fetched from
-GitHub, and the latest stable/edge versions per channel.
+GitHub, and the latest stable/edge versions per channel. The file filter picks the build for
+the **current operating system** on its own.
 
 ![Repository list](docs/screenshot-list.png)
 
-**Releases window** — every release of a repository, with the full file list, sizes and
-SHA-256 checksums. Pick any single file or take the whole release.
+**Detailed progress** — every running download shows its queue number, the file name, the
+current speed, the percentage in the middle of the bar, the time passed, the estimated time
+left, the transferred volume and the place in the queue.
 
-![Releases window](docs/screenshot-releases.png)
+![Detailed progress](docs/screenshot-progress.png)
 
-**Grid view** — all repositories of an author in one screen, icons cached locally.
+**Light view** — the same detailed progress block, but without the icons: name, metadata,
+description and progress in three columns.
+
+![Light view](docs/screenshot-light.png)
+
+**Releases panel** — the releases open **inside the page**, on the right side. Every file of
+a release is ticked by hand, and the **Download selected** button stays visible at the bottom
+with the total size of the selection.
+
+![Releases panel](docs/screenshot-releases.png)
+
+**Download legend** — the log tab opens with the list of the running downloads: number, name,
+speed, percentage, time passed, time left and volume.
+
+![Download legend](docs/screenshot-downloads.png)
+
+**Grid view** — all repositories of an author in one screen, icons cached locally. A tile that
+is downloading shows only the bar and the percentage.
 
 ![Grid view](docs/screenshot-grid.png)
 
@@ -64,6 +83,7 @@ description, the file filter and the pin appear right there — no second window
 ![Settings](docs/screenshot-settings.png)
 
 **Log** — every check, download and cleanup is recorded in English or Russian, on screen and on disk.
+The **Check** button shows a live list of what is being checked at the moment.
 
 ![Log](docs/screenshot-log.png)
 
@@ -109,6 +129,29 @@ description, the file filter and the pin appear right there — no second window
 > time and the repositories are processed one after another. Useful on a thin channel or when
 > you want to see every release come in on its own.
 
+> ### ⭐ Detailed progress, everywhere
+> Every running download is described in full: its **number in the queue**, the **file name**,
+> the **current speed**, the **percentage in the middle of the bar**, the **time passed**, the
+> **estimated time left**, the **volume** and the **place in the queue**.
+> The same block is used in the **log legend**, in the **list** cards and in the **light** view —
+> and the tiles of the **grid** keep it short: only the bar and the percentage.
+
+> ### ⭐ The right file for your system
+> The file filter is filled with the **real files of the release**, not with guesses.
+> By default it selects the build for the **current operating system** — *Windows Portable*,
+> *Windows MSI*, *Ubuntu AppImage*, *Ubuntu .deb*, *Ubuntu tar.gz* — and falls back to the
+> source archive if the release has no binary for your system.
+
+> ### ⭐ Releases inside the page
+> The releases open in a **panel on the right side of the page**, not in a separate window.
+> Every release can be unfolded, every file can be ticked by hand, and the
+> **Download selected** button always stays at the bottom with the total size of the selection.
+
+> ### ⭐ See what is being checked
+> The **Check** button does not just refresh in the background — it shows **what is being
+> checked right now**: a progress bar, "checked N of M", and a line per repository with its
+> channel, its version and the number of releases found.
+
 > ### ⭐ Live download list
 > The **Log** tab opens with a live list of the running downloads: a progress bar per file,
 > the percentage, the current speed, the remaining time and the state of every task.
@@ -125,9 +168,10 @@ description, the file filter and the pin appear right there — no second window
 > *Show window / Pause / Stop downloads / Exit*, and the icon changes colour with the state.
 
 > ### ⭐ Any file of any release
-> By default only the **portable** builds are fetched — Windows x64 (zip) and Ubuntu x86_64
-> (AppImage) — with a graceful fallback to `.msi` / `.deb` / source archives.
-> But the releases window lets you tick **any** file of a release, or take **every** file.
+> By default only the build for the **current operating system** is fetched — Windows x64
+> (zip) and Ubuntu x86_64 (AppImage) — with a graceful fallback to `.msi` / `.deb` / source
+> archives.
+> But the releases panel lets you tick **any** file of a release, or take **every** file.
 
 > ### ⭐ Works even when the GitHub API is rate-limited
 > Anonymous GitHub API access is limited to **60 requests per hour per IP** — behind a shared
@@ -149,11 +193,12 @@ description, the file filter and the pin appear right there — no second window
 
 | | Feature |
 |---|---|
-| **Channels** | Stable and unstable tracks, switchable independently in the settings |
+| **Channels** | Stable and unstable tracks, switchable independently in the settings — the unstable track is **off by default** |
 | **Verification** | SHA-256 of every downloaded file, checked against the digest published by GitHub |
 | **Resume** | Interrupted downloads continue from the byte they stopped at (`HTTP Range`) |
-| **Parallelism** | Up to 3 files downloaded at the same time, configurable — or switch to a strictly sequential mode |
-| **Views** | **Grid** (default) with a spring-animated hero card, **List**, **Light** (text only) |
+| **Parallelism** | Whole numbers only: from 1 to **16** simultaneous downloads (8 by default) — or switch to a strictly sequential mode |
+| **File filter** | The real files of the release, with the build for the current OS picked automatically |
+| **Views** | **Grid** (default) with a spring-animated hero card, **List** and **Light** (no icons) — both with a detailed progress block |
 | **Icons** | Repository icons are downloaded once and cached on disk; a repository without one gets the CraftPull icon |
 | **Import / Export** | The repository list, with descriptions and pins, as JSON |
 | **Languages** | English (default) and Russian — the **EN / RU** button in the header switches instantly |
@@ -192,10 +237,13 @@ Ready-made packages are published on the **[Releases page](https://github.com/Ko
 | Platform | Package |
 |---|---|
 | Windows x64 | `craftpull-*-windows-x64.zip` — portable, no installer needed |
+| Ubuntu / Debian x86_64 | `craftpull-*-linux-x86_64.deb` — `sudo apt install ./craftpull-*.deb` |
 | Linux x86_64 | `craftpull-*-linux-x86_64.tar.gz` — with `install.sh` and a `.desktop` entry |
 
-Unpack the Windows archive and run `craftpull.exe`. The Linux archive contains `install.sh`,
-which puts the binary into `~/.local/bin` and registers the desktop entry and the icon.
+Unpack the Windows archive and run `craftpull.exe`. The `.deb` package puts the binary into
+`/usr/bin`, the icon into `/usr/share/icons` and the desktop entry into
+`/usr/share/applications`. The Linux archive contains `install.sh`, which puts the binary into
+`~/.local/bin` and registers the desktop entry and the icon.
 
 ---
 
@@ -219,11 +267,15 @@ The binary lands in `target/release/craftpull`.
 ```sh
 # Ubuntu / Linux: a tar.gz with the binary, icon, .desktop file and install.sh
 ./packaging/build-portable.sh
+
+# Ubuntu / Debian: a .deb package (binary -> /usr/bin, icon and .desktop entry)
+./packaging/build-deb.sh
 ```
 
-CI builds both packages automatically: `.github/workflows/portable.yml`
+CI builds all the packages automatically: `.github/workflows/portable.yml`
 (triggered by a `v*` tag or manually). The Ubuntu package ships `install.sh`, which puts the
-binary into `~/.local/bin` and registers the `.desktop` entry and the icon.
+binary into `~/.local/bin` and registers the `.desktop` entry and the icon; the `.deb` package
+installs the same files system-wide.
 
 ### Desktop shortcut (Windows)
 
@@ -242,13 +294,16 @@ in the settings does exactly the same.
 1. Launch the program — **no repository is selected by default**.
 2. Tick the ones you need (left column, or *Select all*), and add your own repositories as
    `owner/repository`.
-3. **Refresh** — CraftPull queries GitHub and shows the latest release of each channel.
+3. **Check** — CraftPull queries GitHub and shows the latest release of each channel. While it
+   works, the **log** shows what exactly is being checked right now: a progress bar, "checked N
+   of M" and a line per repository.
 4. **Click a card** in the grid — it unfolds into a hero card: description, **Download**,
    file filter and pin, all in one place.
 5. **Download new** — the new versions are fetched; afterwards the old ones are removed,
    except the pinned ones.
-6. **Releases** opens the full release list of a repository: download a specific tag, tick
-   individual files by hand, or take every file of the release.
+6. **Releases** opens the panel on the right side of the page: download a specific tag, tick
+   individual files by hand, or take every file of the release — the **Download selected**
+   button stays at the bottom of the panel at all times.
 
 The **CraftPull icon** on the left of the header is the way back to the main menu from any tab,
 and the **EN / RU** button on the right switches the language of the interface instantly.
@@ -264,8 +319,10 @@ and the **EN / RU** button on the right switches the language of the interface i
 | `craftpull --selftest [owner/repo]` | end-to-end check: query GitHub and download a release, no window |
 | `craftpull --tab <repos\|settings\|logs>` | open a specific tab |
 | `craftpull --view <grid\|list\|light>` | open a specific view mode |
-| `craftpull --popup <owner/repo>` | open the releases window of a repository |
+| `craftpull --popup <owner/repo>` | open the releases panel of a repository |
 | `craftpull --hero <owner/repo>` | open the grid with the card of that repository already unfolded |
+| `craftpull --download <owner/repo>` | start the download of that repository right away |
+| `craftpull --no-icons` | do not download or show the icons of third-party applications |
 | `craftpull --no-refresh` | do not contact GitHub on start, use the cache |
 | `craftpull --refresh` | refresh the repositories even if the cache is fresh |
 | `craftpull --version` | show the version |
@@ -303,15 +360,17 @@ quota lets you down: fresh data is shown instantly and refreshed in the backgrou
       "enabled": true,
       "description": "An open-source PDF reader and editor written from scratch in pure Rust",
       "pinned": ["v0.21.1"],
-      "filter": "Portable",
+      "filter": "Auto",
       "clone_source": false
     }
   ]
 }
 ```
 
-`filter`: `Portable` (Windows x64 + Ubuntu x86_64), `All` (every file of the release),
-`Source` (source archive only).
+`filter`: `Auto` (the build for the current operating system — the default), `WindowsPortable`,
+`WindowsMsi`, `WindowsSetup`, `LinuxAppImage`, `LinuxTarGz`, `LinuxDeb`, `LinuxRpm`,
+`Source` (source archive only), `All` (every file of the release).
+The old value `Portable` is still accepted and behaves like `Auto`.
 
 ---
 
@@ -336,14 +395,17 @@ next start.
 | `src/webfeed.rs` | fallback: public GitHub pages when the API limit is hit |
 | `src/icons.rs` | repository icon download and local cache |
 | `src/download.rs` | downloader: speed limit, pause, resume, SHA-256 |
-| `src/manager.rs` | download planning, cleanup of old versions, pins |
+| `src/manager.rs` | download planning, cleanup of old versions, pins, file selection |
+| `src/model.rs` | common data model: tasks, progress, releases, formatting |
 | `src/storage.rs` | version folders on disk, scanning, cleanup |
 | `src/selfupdate.rs` | self-update from sources, Windows autostart |
 | `src/tray.rs` | system tray icon and menu |
 | `src/icon.rs` | procedural icon, ICO/PNG, shortcut creation |
 | `src/ui/hero.rs` | hero card: custom layout, shared-element morph, card actions |
 | `src/ui/anim.rs` | spring physics behind every animation |
-| `src/ui/logs.rs` | live list of downloads: progress, speed, remaining time |
+| `src/ui/progress.rs` | progress bar with the percentage in the middle, detailed progress block |
+| `src/ui/releases.rs` | releases panel inside the page, file selection, "Download selected" |
+| `src/ui/logs.rs` | list of checks and live list of downloads |
 | `src/ui/` | egui interface: repositories, settings, log |
 
 The UI is built with **egui/eframe**, networking with **reqwest + tokio**, the tray icon with

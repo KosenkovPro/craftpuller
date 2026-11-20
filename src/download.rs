@@ -127,6 +127,8 @@ pub struct Downloader {
     pub control: Arc<Control>,
     pub tasks: TaskRegistry,
     pub verify_sha256: bool,
+    /// Порядковый номер задачи в очереди загрузки.
+    pub seq: u64,
 }
 
 impl Downloader {
@@ -299,7 +301,13 @@ impl Downloader {
             let now = Instant::now();
             if now.duration_since(last_report) >= Duration::from_millis(400) {
                 let dt = now.duration_since(last_report).as_secs_f64().max(0.001);
-                speed = (downloaded - last_bytes) as f64 / dt;
+                let instant = (downloaded - last_bytes) as f64 / dt;
+                // Скорость сглаживаем: мгновенная скачет, и оценка остатка мигает.
+                speed = if speed <= 0.0 {
+                    instant
+                } else {
+                    speed * 0.6 + instant * 0.4
+                };
                 last_report = now;
                 last_bytes = downloaded;
                 self.update(
@@ -388,6 +396,10 @@ impl Downloader {
                 speed,
                 state,
                 error: None,
+                seq: self.seq,
+                started_at: crate::model::now_ms(),
+                queue: 0,
+                queue_total: 0,
             });
             entry.total = total;
             entry.downloaded = downloaded;

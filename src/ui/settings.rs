@@ -1,7 +1,7 @@
 //! Вкладка «Настройки».
 
 use super::{theme, CraftApp};
-use crate::config::{AssetFilter, ViewMode};
+use crate::config::ViewMode;
 use crate::lang::{lang_name, t, tf};
 use crate::model::LogLevel;
 use egui::{self, RichText};
@@ -119,19 +119,29 @@ pub fn show(ui: &mut egui::Ui, app: &mut CraftApp) {
                     });
                 }
 
-                let mut parallel = cfg.max_parallel as f64;
+                // Лимит параллельных загрузок — только целые числа.
+                let mut parallel = cfg.max_parallel.clamp(1, crate::config::MAX_PARALLEL);
                 ui.horizontal(|ui| {
                     ui.label(t("settings.parallel"));
                     if ui
                         .add_sized(
                             [240.0, 24.0],
-                            egui::Slider::new(&mut parallel, 1.0..=10.0),
+                            egui::Slider::new(&mut parallel, 1..=crate::config::MAX_PARALLEL),
                         )
                         .changed()
                     {
-                        cfg.max_parallel = parallel as usize;
+                        cfg.max_parallel = parallel;
                         dirty = true;
                     }
+                    ui.label(RichText::new(parallel.to_string()).size(12.5).strong());
+                    ui.label(
+                        RichText::new(crate::lang::tf(
+                            "settings.parallel_max",
+                            &[("{n}", &crate::config::MAX_PARALLEL.to_string())],
+                        ))
+                        .size(11.0)
+                        .color(theme::DIM),
+                    );
                 });
 
                 // Параллельные или последовательные загрузки.
@@ -350,17 +360,61 @@ pub fn show(ui: &mut egui::Ui, app: &mut CraftApp) {
                                     .strong(),
                             );
                             let mut filter = cfg.repos[i].filter;
+                            let slug = cfg.repos[i].slug.clone();
+                            // Варианты — реальные файлы релиза этого репозитория.
+                            let options: Vec<(crate::config::AssetKind, String)> = app
+                                .state
+                                .shared
+                                .repo_runtime(&slug)
+                                .and_then(|rt| {
+                                    rt.releases
+                                        .iter()
+                                        .find(|rel| !rel.is_edge())
+                                        .or_else(|| rt.releases.first())
+                                        .map(|rel| {
+                                            crate::manager::asset_options(&slug, rel)
+                                                .into_iter()
+                                                .map(|(k, a)| {
+                                                    (
+                                                        k,
+                                                        format!(
+                                                            "{} · {}",
+                                                            k.localized_label(),
+                                                            crate::model::human_size(a.size)
+                                                        ),
+                                                    )
+                                                })
+                                                .collect()
+                                        })
+                                })
+                                .unwrap_or_default();
                             let combo = egui::ComboBox::from_id_salt("filter")
                                 .selected_text(filter.localized_label())
-                                .width(170.0)
+                                .width(250.0)
                                 .show_ui(ui, |ui| {
-                                    for f in [
-                                        AssetFilter::Portable,
-                                        AssetFilter::All,
-                                        AssetFilter::Source,
-                                    ] {
-                                        ui.selectable_value(&mut filter, f, f.localized_label());
+                                    ui.selectable_value(
+                                        &mut filter,
+                                        crate::config::AssetKind::Auto,
+                                        format!(
+                                            "{} · {}",
+                                            crate::config::AssetKind::Auto.localized_label(),
+                                            t("filter.auto_hint")
+                                        ),
+                                    );
+                                    for (k, label) in &options {
+                                        ui.selectable_value(&mut filter, *k, label.clone());
                                     }
+                                    ui.separator();
+                                    ui.selectable_value(
+                                        &mut filter,
+                                        crate::config::AssetKind::Source,
+                                        crate::config::AssetKind::Source.localized_label(),
+                                    );
+                                    ui.selectable_value(
+                                        &mut filter,
+                                        crate::config::AssetKind::All,
+                                        crate::config::AssetKind::All.localized_label(),
+                                    );
                                 });
                             if combo.response.changed() {
                                 cfg.repos[i].filter = filter;
