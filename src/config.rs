@@ -27,7 +27,44 @@ pub const DEFAULT_REPOS: &[&str] = &[
     "storytold/craft-anything",
     "storytold/craft-libs",
     "storytold/craft-launcher",
+    "flameshot-org/flameshot",
 ];
+
+/// Короткое назначение программы для репозиториев по умолчанию.
+///
+/// Это пользовательские данные, а не переводы интерфейса, поэтому они живут
+/// здесь, а не в `lang.rs`.
+pub const DEFAULT_PURPOSES: &[(&str, &str)] = &[
+    ("storytold/pdfcraft", "PDF-документы"),
+    ("storytold/wordcraft", "Текстовый редактор"),
+    ("storytold/gridcraft", "Таблицы"),
+    ("storytold/deckcraft", "Презентации"),
+    ("storytold/photocraft", "Работа с фото"),
+    ("storytold/vectorcraft", "Векторная графика"),
+    ("storytold/figcraft", "Прототипы"),
+    ("storytold/designcraft", "Дизайн и вёрстка"),
+    ("storytold/cadcraft", "Чертежи и CAD"),
+    ("storytold/texturecraft", "Текстуры"),
+    ("storytold/materialcraft", "Материалы"),
+    ("storytold/filmcraft", "Монтаж видео"),
+    ("storytold/lightcraft", "Освещение"),
+    ("storytold/effectcraft", "Эффекты"),
+    ("storytold/soundcraft", "Звук и музыка"),
+    ("storytold/artcraft", "Живопись"),
+    ("storytold/craft-anything", "Всё сразу"),
+    ("storytold/craft-libs", "Библиотеки"),
+    ("storytold/craft-launcher", "Запуск программ"),
+    ("flameshot-org/flameshot", "Скриншоты"),
+];
+
+/// Назначение по умолчанию для репозитория. Пустая строка — назначения нет.
+pub fn default_purpose(slug: &str) -> &'static str {
+    DEFAULT_PURPOSES
+        .iter()
+        .find(|(s, _)| *s == slug)
+        .map(|(_, p)| *p)
+        .unwrap_or("")
+}
 
 /// Какой файл релиза скачивать.
 ///
@@ -165,6 +202,9 @@ pub struct RepoConfig {
     pub clone_source: bool,
     /// Краткое описание (подтягивается с GitHub, можно править вручную).
     pub description: String,
+    /// Короткое назначение программы («PDF-документы», «Векторная графика»).
+    #[serde(default)]
+    pub purpose: String,
     /// Локальный путь к сохранённой иконке репозитория.
     pub icon: Option<String>,
 }
@@ -178,6 +218,7 @@ impl RepoConfig {
             filter: AssetKind::Auto,
             clone_source: false,
             description: String::new(),
+            purpose: default_purpose(slug).to_string(),
             icon: None,
         }
     }
@@ -313,6 +354,12 @@ impl Config {
                 self.repos.push(RepoConfig::new(slug));
             }
         }
+        // Назначение появляется и у уже сохранённых репозиториев.
+        for repo in self.repos.iter_mut() {
+            if repo.purpose.trim().is_empty() {
+                repo.purpose = default_purpose(&repo.slug).to_string();
+            }
+        }
         if self.max_parallel == 0 {
             self.max_parallel = 1;
         }
@@ -340,6 +387,7 @@ impl Config {
                     slug: r.slug.clone(),
                     enabled: r.enabled,
                     description: r.description.clone(),
+                    purpose: r.purpose.clone(),
                     pinned: r.pinned.clone(),
                     filter: r.filter,
                     clone_source: r.clone_source,
@@ -362,6 +410,9 @@ impl Config {
                     if !entry.description.is_empty() {
                         existing.description = entry.description.clone();
                     }
+                    if !entry.purpose.trim().is_empty() {
+                        existing.purpose = entry.purpose.clone();
+                    }
                     for p in &entry.pinned {
                         if !existing.pinned.contains(p) {
                             existing.pinned.push(p.clone());
@@ -378,6 +429,7 @@ impl Config {
                         filter: entry.filter,
                         clone_source: entry.clone_source,
                         description: entry.description.clone(),
+                        purpose: entry.purpose.clone(),
                         icon: None,
                     });
                     added += 1;
@@ -403,6 +455,8 @@ pub struct RepoEntry {
     pub enabled: bool,
     #[serde(default)]
     pub description: String,
+    #[serde(default)]
+    pub purpose: String,
     #[serde(default)]
     pub pinned: Vec<String>,
     #[serde(default)]

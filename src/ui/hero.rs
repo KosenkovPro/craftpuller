@@ -25,9 +25,9 @@ use crate::model::{
 use crate::storage;
 
 /// Высота плитки в свёрнутом виде.
-const TILE_H: f32 = 124.0;
+const TILE_H: f32 = 140.0;
 /// Высота раскрытой карточки.
-const HERO_H: f32 = 256.0;
+const HERO_H: f32 = 268.0;
 /// Зазор между карточками.
 const GAP: f32 = 14.0;
 /// Максимальная ширина плитки.
@@ -156,6 +156,8 @@ struct CardData {
     tex: Option<TextureHandle>,
     enabled: bool,
     description: String,
+    /// Короткое назначение программы — показывается в плитке под названием.
+    purpose: String,
     stable: Option<ReleaseInfo>,
     edge: Option<ReleaseInfo>,
     installed: Vec<InstalledVersion>,
@@ -490,6 +492,7 @@ fn collect_data(app: &mut CraftApp, rc: &RepoConfig, ctx: &Context) -> CardData 
         tex,
         enabled: rc.enabled,
         description: rc.description.trim().to_string(),
+        purpose: rc.purpose.trim().to_string(),
         stable: rt.as_ref().and_then(|r| r.latest_stable.clone()),
         edge: rt.as_ref().and_then(|r| r.latest_edge.clone()),
         installed: rt.as_ref().map(|r| r.installed.clone()).unwrap_or_default(),
@@ -609,7 +612,7 @@ fn draw_card(
         // Идёт загрузка — в плитке только полоса и процент.
         if let Some(task) = data.tasks.iter().find(|t| !t.state.is_finished()) {
             let bar_rect = Rect::from_min_size(
-                Pos2::new(tile_origin.left() + 12.0, tile_origin.top() + 96.0),
+                Pos2::new(tile_origin.left() + 12.0, tile_origin.top() + 90.0),
                 Vec2::new((tile_origin.width() - 24.0).max(30.0), 17.0),
             );
             draw_bar(
@@ -633,6 +636,20 @@ fn draw_card(
                 text,
                 FontId::new(11.0, FontFamily::Proportional),
                 with_alpha(color, alpha),
+            );
+        }
+
+        // Назначение программы — короткой строкой под названием и версией.
+        if !data.purpose.is_empty() {
+            let purpose_font = FontId::new(11.0, FontFamily::Proportional);
+            let max_w = (tile_origin.width() - 20.0).max(40.0);
+            let text = elide(&painter, &data.purpose, &purpose_font, max_w);
+            painter.text(
+                Pos2::new(tile_origin.center().x, tile_origin.top() + 120.0),
+                Align2::CENTER_CENTER,
+                text,
+                purpose_font,
+                with_alpha(theme::DIM, alpha),
             );
         }
     }
@@ -753,13 +770,31 @@ fn draw_hero_content(
         with_alpha(theme::DIM, alpha),
     );
 
+    // Назначение программы — под строкой метаданных.
+    if !data.purpose.is_empty() {
+        let purpose_font = FontId::new(12.5, FontFamily::Proportional);
+        let text = elide(
+            painter,
+            &data.purpose,
+            &purpose_font,
+            (right_edge - name_left).max(60.0),
+        );
+        painter.text(
+            Pos2::new(name_left, name_mid + 48.0),
+            Align2::LEFT_CENTER,
+            text,
+            purpose_font,
+            with_alpha(theme::DIM, alpha),
+        );
+    }
+
     // Каналы: стабильный и нестабильный. Плашки ниже строки метаданных,
     // иначе они наезжают на неё.
     let mut x = name_left;
     if let Some(rel) = &data.stable {
         let w = draw_chip(
             painter,
-            Vec2::new(x, name_mid + 46.0),
+            Vec2::new(x, name_mid + 70.0),
             t("popup.stable"),
             &rel.tag,
             theme::OK,
@@ -774,7 +809,7 @@ fn draw_hero_content(
     if let Some(rel) = &data.edge {
         draw_chip(
             painter,
-            Vec2::new(x, name_mid + 46.0),
+            Vec2::new(x, name_mid + 70.0),
             t("popup.edge"),
             &rel.tag,
             theme::EDGE,
@@ -793,7 +828,7 @@ fn draw_hero_content(
     let wrap = (rect.width() - 40.0).max(80.0);
     let galley = painter.layout(desc, desc_font, with_alpha(theme::TEXT, alpha), wrap);
     let desc_rect = Rect::from_min_size(
-        Pos2::new(rect.left() + 20.0, rect.top() + 134.0),
+        Pos2::new(rect.left() + 20.0, rect.top() + 156.0),
         Vec2::new(wrap, 36.0),
     );
     let clipped = painter.with_clip_rect(painter.clip_rect().intersect(desc_rect));
@@ -804,7 +839,7 @@ fn draw_hero_content(
     );
 
     // Нижняя строка: что уже скачано слева, активная загрузка справа.
-    let row_y = rect.top() + 182.0;
+    let row_y = rect.top() + 200.0;
     let small = FontId::new(11.0, FontFamily::Proportional);
 
     // Справа — активная загрузка: резервируем под неё место.
@@ -968,7 +1003,7 @@ fn draw_hero_buttons(
     actions: &mut Vec<CardAction>,
 ) {
     let alpha = ((prog - 0.40) / 0.60).clamp(0.0, 1.0);
-    let top = rect.top() + 208.0;
+    let top = rect.top() + 222.0;
     let mut x = rect.left() + 20.0;
 
     // Главная кнопка «Скачать».

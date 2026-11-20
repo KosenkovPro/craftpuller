@@ -424,6 +424,13 @@ impl eframe::App for CraftApp {
                             .size(11.0)
                             .color(theme::DIM),
                     );
+                    // Лицензия программы: при наведении — пояснение, что она разрешает.
+                    ui.label(
+                        egui::RichText::new(t("license.name"))
+                            .size(11.0)
+                            .color(theme::DIM),
+                    )
+                    .on_hover_text(t("license.hint"));
                     ui.label(
                         egui::RichText::new(format!("v{}", env!("CARGO_PKG_VERSION")))
                             .size(11.0)

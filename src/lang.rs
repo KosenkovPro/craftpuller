@@ -240,6 +240,8 @@ fn table() -> &'static HashMap<&'static str, (&'static str, &'static str)> {
             ("about.site", "Website", "Сайт"),
             ("about.telegram", "Telegram", "Telegram"),
             ("about.note", "Questions and suggestions — write to me", "Вопросы и предложения — пишите"),
+            ("license.name", "MIT / Apache-2.0", "MIT / Apache-2.0"),
+            ("license.hint", "CraftPull is distributed under the dual MIT / Apache-2.0 license: you may use, modify and redistribute it, including in commercial products, as long as the copyright notice is kept. Apache-2.0 additionally grants an explicit patent license. The full texts are in the LICENSE file.", "CraftPull распространяется под двойной лицензией MIT / Apache-2.0: программу можно свободно использовать, изменять и распространять, в том числе в коммерческих продуктах, при сохранении уведомления об авторских правах. Apache-2.0 дополнительно даёт явные права на патенты. Полные тексты лицензий — в файле LICENSE."),
             // --- Журнал ---
             ("log.title", "Log", "Журнал"),
             ("log.clear", "Clear", "Очистить"),
