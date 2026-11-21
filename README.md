@@ -411,7 +411,8 @@ current one with it and starts the program again. A check for a new version also
 start-up — the program itself reports that an update is available.
 
 The release source is the official repository by default; it can be changed with the
-`self_update_repo` field of the settings.
+`self_update_repo` field of the settings. If the GitHub API rate limit gets in the way, the
+program reads the public release page instead — it carries the file checksum as well.
 
 ### Update from sources
 

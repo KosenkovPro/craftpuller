@@ -532,7 +532,23 @@ fn user_agent() -> String {
 }
 
 /// Запросить последний релиз репозитория.
+///
+/// Сначала — REST API GitHub. Если он отказывает (чаще всего исчерпан лимит
+/// запросов для анонимных клиентов), читаем публичные страницы релиза:
+/// там тоже есть имя файла, размер и контрольная сумма.
 pub async fn fetch_latest_release(client: &Client, repo: &str) -> Result<ReleaseInfo, String> {
+    match latest_release_api(client, repo).await {
+        Ok(release) => Ok(release),
+        Err(api_error) => match latest_release_web(client, repo).await {
+            Ok(release) => Ok(release),
+            // Обе дороги не сработали — показываем ошибку API: она понятнее.
+            Err(_) => Err(api_error),
+        },
+    }
+}
+
+/// Последний релиз через REST API GitHub.
+async fn latest_release_api(client: &Client, repo: &str) -> Result<ReleaseInfo, String> {
     let url = format!("{API}/repos/{repo}/releases/latest");
     let resp = client
         .get(&url)
@@ -558,6 +574,39 @@ pub async fn fetch_latest_release(client: &Client, repo: &str) -> Result<Release
         tag: raw.tag_name,
         assets: raw.assets,
     })
+}
+
+/// Последний релиз с публичных страниц GitHub.
+///
+/// Эти страницы не подчиняются ограничению API: анонимным клиентам GitHub
+/// даёт всего 60 запросов в час на IP-адрес, и список релизов из-за этого
+/// перестаёт работать.
+async fn latest_release_web(client: &Client, repo: &str) -> Result<ReleaseInfo, String> {
+    let releases = crate::webfeed::list_releases(client, repo).await?;
+    let release = releases
+        .iter()
+        .find(|r| !r.prerelease)
+        .or_else(|| releases.first())
+        .ok_or_else(|| t("err.web_no_releases").to_string())?;
+    Ok(ReleaseInfo {
+        tag: release.tag.clone(),
+        assets: web_assets(release),
+    })
+}
+
+/// Перевести файлы релиза с публичной страницы в файлы релиза апдейтера.
+fn web_assets(release: &crate::model::ReleaseInfo) -> Vec<ReleaseAsset> {
+    release
+        .assets
+        .iter()
+        .filter(|a| !a.synthetic)
+        .map(|a| ReleaseAsset {
+            name: a.name.clone(),
+            browser_download_url: a.url.clone(),
+            size: a.size,
+            digest: a.digest.clone(),
+        })
+        .collect()
 }
 
 /// Скачать файл релиза и сверить его SHA-256.
@@ -862,6 +911,43 @@ mod tests {
         }
     }
 
+    /// Файлы с публичной страницы переносятся в апдейтер вместе с суммами.
+    #[test]
+    fn web_assets_keep_the_checksum() {
+        let release = crate::model::ReleaseInfo {
+            tag: "v0.5.0".to_string(),
+            name: "v0.5.0".to_string(),
+            prerelease: false,
+            draft: false,
+            published_at: None,
+            html_url: String::new(),
+            assets: vec![
+                crate::model::AssetInfo {
+                    name: "craftpull-0.5.0-windows-x64.zip".to_string(),
+                    url: "https://github.com/o/r/releases/download/v0.5.0/craftpull-0.5.0-windows-x64.zip"
+                        .to_string(),
+                    size: 123,
+                    digest: Some("sha256:abc".to_string()),
+                    synthetic: false,
+                },
+                crate::model::AssetInfo {
+                    name: "v0.5.0-source.zip".to_string(),
+                    url: "https://example.invalid/source.zip".to_string(),
+                    size: 0,
+                    digest: None,
+                    synthetic: true,
+                },
+            ],
+            source_zip: String::new(),
+        };
+        let assets = web_assets(&release);
+        // Архив исходников — не файл релиза, в выбор не попадает.
+        assert_eq!(assets.len(), 1);
+        assert_eq!(assets[0].name, "craftpull-0.5.0-windows-x64.zip");
+        assert_eq!(assets[0].digest.as_deref(), Some("sha256:abc"));
+        assert_eq!(assets[0].size, 123);
+    }
+
     /// Версии сравниваются по частям, а не как строки.
     #[test]
     fn version_comparison_uses_numbers() {
@@ -1034,8 +1120,7 @@ mod tests {
         assert!(a.sha256().is_none());
     }
 
-    /// Вспомогательный скрипт на Windows меняет файлы и запускает новую программу.
-    #[cfg(windows)]
+    /// Вспомогательный скрипт на Windows меняет файлы и запускает новую программу.    #[cfg(windows)]
     #[test]
     fn helper_script_replaces_the_program() {
         // Настоящие файлы программы не нужны, но скрипт в конце запускает новую
