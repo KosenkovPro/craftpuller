@@ -185,7 +185,7 @@ The **Check** button shows a live list of what is being checked at the moment.
 
 > ### ⭐ Updates itself with one button
 > The settings have a **Program update** section: a **Check for updates** button and — when a
-> new version is out — a highlighted **Update to v0.5.0**. CraftPull downloads the release
+> new version is out — a highlighted **Update to v0.5.3**. CraftPull downloads the release
 > file straight from GitHub, checks its SHA-256 sum, unpacks the executable, replaces the
 > current one with it and starts the program again. A check also runs at start-up.
 >
@@ -247,14 +247,23 @@ Ready-made packages are published on the **[Releases page](https://github.com/Ko
 |---|---|
 | Windows x64 | `craftpull-*-windows-x64.zip` — portable, no installer needed |
 | macOS (Intel + Apple Silicon) | `craftpull-*-macos-universal.zip` — `CraftPull.app`, runs on both architectures |
+| macOS, Intel only | `craftpull-*-macos-x64.zip` — `CraftPull.app` for Intel |
+| macOS, Apple Silicon only | `craftpull-*-macos-arm64.zip` — `CraftPull.app` for Apple Silicon |
+| macOS, disk image | `craftpull-*-macos-universal.dmg` — drag the app into «Applications» |
+| macOS, installer | `craftpull-*-macos-universal.pkg` — step-by-step installation into `/Applications` |
 | Ubuntu / Debian x86_64 | `craftpull-*-linux-x86_64.deb` — `sudo apt install ./craftpull-*.deb` |
 | Linux x86_64 | `craftpull-*-linux-x86_64.tar.gz` — with `install.sh` and a `.desktop` entry |
 
 Unpack the Windows archive and run `craftpull.exe`. The macOS archive contains `CraftPull.app` —
-unpack it and drag the app into «Applications», or run it straight from the folder. The `.deb`
+unpack it and drag the app into «Applications», or run it straight from the folder. The `.dmg`
+shows the usual window with the app and the «Applications» shortcut. The `.pkg` is a regular
+step-by-step installer: the app goes into `/Applications`. The `.deb`
 package puts the binary into `/usr/bin`, the icon into `/usr/share/icons` and the desktop entry
 into `/usr/share/applications`. The Linux archive contains `install.sh`, which puts the binary into
 `~/.local/bin` and registers the desktop entry and the icon.
+
+The macOS builds are not signed, so macOS shows a "cannot be verified" warning. Open the app
+with right-click → Open once — macOS remembers the choice afterwards.
 
 ---
 
@@ -405,7 +414,7 @@ so only the key is stored. The field is optional too.
 
 The settings have a **Program update** section: it shows the installed version, a
 **Check for updates** button and — when a new version is out — a highlighted
-**Update to v0.5.0** button. CraftPull downloads the release file straight from GitHub,
+**Update to v0.5.3** button. CraftPull downloads the release file straight from GitHub,
 checks its SHA-256 sum against the one GitHub reports, unpacks the executable, replaces the
 current one with it and starts the program again. A check for a new version also runs at
 start-up — the program itself reports that an update is available.

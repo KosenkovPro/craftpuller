@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!-- Описание установщика для productbuild. Подстановки @VERSION@ и @MINMACOS@
+     заменяются скриптом make-pkg.sh перед сборкой. -->
+<installer-gui-script minSpecVersion="1">
+    <title>Install CraftPull</title>
+    <organization>io.github.kosenkovpro</organization>
+    <domains enable_anywhere="false" enable_currentUserHome="false" enable_localSystem="true"/>
+    <options customize="never" require-scripts="false" hostArchitectures="x86_64,arm64"/>
+    <welcome file="welcome.html"/>
+    <license file="license.html"/>
+    <os-version min="@MINMACOS@"/>
+    <choices-outline>
+        <line choice="default">
+            <line choice="io.github.kosenkovpro.craftpull.pkg"/>
+        </line>
+    </choices-outline>
+    <choice id="default"/>
+    <choice id="io.github.kosenkovpro.craftpull.pkg" visible="false">
+        <pkg-ref id="io.github.kosenkovpro.craftpull.pkg"/>
+    </choice>
+    <pkg-ref id="io.github.kosenkovpro.craftpull.pkg" version="@VERSION@" onConclusion="none">CraftPull</pkg-ref>
+</installer-gui-script>

@@ -135,6 +135,9 @@ pub fn is_newer(candidate: &str, current: &str) -> bool {
 ///
 /// Windows — zip с «windows» в имени, Linux — tar.gz с «linux» и
 /// «x86_64», macOS — zip с «macos» (в приоритете universal).
+///
+/// Образ диска .dmg и установщик .pkg не берём: это файлы для человека,
+/// программа их не распаковывает.
 pub fn pick_asset(assets: &[ReleaseAsset], os: TargetOs) -> Option<&ReleaseAsset> {
     let candidates: Vec<&ReleaseAsset> = match os {
         TargetOs::Windows => assets
@@ -153,7 +156,10 @@ pub fn pick_asset(assets: &[ReleaseAsset], os: TargetOs) -> Option<&ReleaseAsset
             .collect(),
         TargetOs::MacOs => assets
             .iter()
-            .filter(|a| a.name.to_ascii_lowercase().contains("macos"))
+            .filter(|a| {
+                let n = a.name.to_ascii_lowercase();
+                n.contains("macos") && !n.ends_with(".dmg") && !n.ends_with(".pkg")
+            })
             .collect(),
     };
     // Приоритет: tar.gz для Linux, universal для macOS.
@@ -970,6 +976,18 @@ mod tests {
         ];
         let picked = pick_asset(&assets, TargetOs::Windows).expect("файл для Windows");
         assert_eq!(picked.name, "craftpull-0.4.0-windows-x64.zip");
+    }
+
+    /// Образ диска и установщик не выбираются: программа их не распаковывает.
+    #[test]
+    fn macos_dmg_and_pkg_are_not_chosen() {
+        let assets = vec![
+            asset("craftpull-0.5.0-macos-universal.dmg"),
+            asset("craftpull-0.5.0-macos-universal.pkg"),
+            asset("craftpull-0.5.0-macos-universal.zip"),
+        ];
+        let picked = pick_asset(&assets, TargetOs::MacOs).expect("файл для macOS");
+        assert_eq!(picked.name, "craftpull-0.5.0-macos-universal.zip");
     }
 
     /// Для Linux выбирается tar.gz, а не deb.
