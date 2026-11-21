@@ -22,6 +22,7 @@ mod selfupdate;
 mod storage;
 mod tray;
 mod ui;
+mod updater;
 mod webfeed;
 
 use std::process::exit;

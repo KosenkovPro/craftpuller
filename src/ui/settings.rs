@@ -242,6 +242,65 @@ pub fn show(ui: &mut egui::Ui, app: &mut CraftApp) {
                 }
             });
 
+            // --- Обновление программы ---
+            section(ui, t("settings.update_title"), |ui| {
+                ui.label(
+                    RichText::new(tf(
+                        "settings.update_current",
+                        &[("{v}", crate::updater::current_version())],
+                    ))
+                    .size(12.5),
+                );
+                let upd = crate::updater::snapshot();
+                ui.horizontal(|ui| {
+                    let check = ui.add(
+                        egui::Button::new(t("settings.update_check"))
+                            .min_size(egui::vec2(0.0, 28.0)),
+                    );
+                    if check.clicked() && !upd.checking && !upd.updating {
+                        crate::updater::spawn_check(app.state.clone());
+                    }
+                    if upd.checking {
+                        ui.spinner();
+                    }
+                });
+
+                // Новая версия — кнопка обновления заметно выделяется.
+                if upd.available {
+                    ui.label(
+                        RichText::new(tf("settings.update_available", &[("{tag}", &upd.tag)]))
+                            .size(12.5)
+                            .color(theme::OK),
+                    );
+                    ui.horizontal(|ui| {
+                        let update = ui.add(
+                            egui::Button::new(tf("settings.update_now", &[("{tag}", &upd.tag)]))
+                                .fill(theme::ACCENT)
+                                .stroke(egui::Stroke::new(
+                                    1.0_f32,
+                                    theme::ACCENT.gamma_multiply(1.4),
+                                ))
+                                .min_size(egui::vec2(0.0, 30.0)),
+                        );
+                        if update.clicked() && !upd.updating {
+                            crate::updater::spawn_update(app.state.clone());
+                        }
+                        if upd.updating {
+                            ui.spinner();
+                        }
+                    });
+                }
+
+                if !upd.status.is_empty() {
+                    ui.label(RichText::new(&upd.status).size(11.5).color(theme::DIM));
+                }
+                ui.label(
+                    RichText::new(t("settings.update_hint"))
+                        .size(11.5)
+                        .color(theme::DIM),
+                );
+            });
+
             // --- Самообновление ---
             section(ui, t("settings.selfupdate"), |ui| {
                 ui.horizontal(|ui| {

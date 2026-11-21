@@ -92,6 +92,10 @@ impl CraftApp {
                 st.refresh_icons().await;
             });
         }
+        // Тихая фоновая проверка обновлений самой программы.
+        if launch.auto_refresh {
+            crate::updater::spawn_check(state.clone());
+        }
         // Раскрытая карточка, заданная в командной строке.
         let hero_state = {
             let mut hero = hero::HeroState::new();
@@ -243,6 +247,11 @@ impl eframe::App for CraftApp {
     fn update(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
         theme::apply(ctx);
         self.handle_tray(ctx);
+
+        // Уведомление от фоновой проверки обновлений программы.
+        if let Some((text, level)) = crate::updater::take_toast() {
+            self.notify(text, level);
+        }
 
         // Старт свёрнутым в трей.
         if self.hide_on_start {
