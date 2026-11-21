@@ -334,6 +334,7 @@ cargo build --release
 | `craftpull --install-shortcut` | создать ярлык на рабочем столе |
 | `craftpull --export-icon <file.png>` | сохранить иконку 256×256 |
 | `craftpull --selftest [owner/repo]` | сквозная проверка: опросить GitHub и скачать релиз, без окна |
+| `craftpull --update` | проверить обновление программы и установить его, без окна |
 | `craftpull --tab <repos\|settings\|logs>` | открыть нужную вкладку |
 | `craftpull --view <grid\|list\|light>` | открыть нужный режим отображения |
 | `craftpull --popup <owner/repo>` | открыть панель релизов репозитория |

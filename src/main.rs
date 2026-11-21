@@ -69,6 +69,30 @@ fn main() {
         return;
     }
 
+    // Обновление самой программы из командной строки: без окна.
+    if args.iter().any(|a| a == "--update") {
+        attach_console();
+        let rt = match tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .worker_threads(2)
+            .build()
+        {
+            Ok(rt) => rt,
+            Err(e) => {
+                eprintln!("Error: {e}");
+                exit(1);
+            }
+        };
+        match rt.block_on(crate::updater::update_from_console()) {
+            Ok(message) => println!("{message}"),
+            Err(e) => {
+                eprintln!("Error: {e}");
+                exit(1);
+            }
+        }
+        return;
+    }
+
     // Отложенное обновление: подменяем файл программы и перезапускаем.
     if let Some(path) = selfupdate::apply_pending_update() {
         let _ = std::process::Command::new(&path).spawn();
@@ -220,6 +244,7 @@ fn print_help() {
          craftpull --install-shortcut — create a desktop shortcut\n  \
          craftpull --export-icon <file.png> — save the 256×256 icon\n  \
          craftpull --selftest [owner/repo] — check the download pipeline without a window\n  \
+         craftpull --update          — check for a new version of the program and install it\n  \
          craftpull --tab <repos|settings|logs> — open a specific tab\n  \
          craftpull --view <grid|list|light> — open a specific view mode\n  \
          craftpull --popup <owner/repo> — open the release list of a repository\n  \

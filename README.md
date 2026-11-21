@@ -333,6 +333,7 @@ and the **EN / RU** button on the right switches the language of the interface i
 | `craftpull --install-shortcut` | create a desktop shortcut |
 | `craftpull --export-icon <file.png>` | save the 256×256 icon as PNG |
 | `craftpull --selftest [owner/repo]` | end-to-end check: query GitHub and download a release, no window |
+| `craftpull --update` | check for a new version of the program and install it, no window |
 | `craftpull --tab <repos\|settings\|logs>` | open a specific tab |
 | `craftpull --view <grid\|list\|light>` | open a specific view mode |
 | `craftpull --popup <owner/repo>` | open the releases panel of a repository |

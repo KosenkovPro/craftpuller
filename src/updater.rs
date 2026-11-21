@@ -678,6 +678,42 @@ pub fn spawn_update(state: Arc<AppState>) {
     });
 }
 
+/// Проверить обновление и установить его без окна.
+///
+/// Тот же путь, что и у кнопки в настройках, только без интерфейса:
+/// удобно для скриптов и для проверки обновления вручную.
+///
+/// Возвращает описание того, что произошло.
+pub async fn update_from_console() -> Result<String, String> {
+    let cfg = Config::load();
+    let repo = update_repo(&cfg);
+    let version = current_version();
+    let client = build_client(&cfg.github_token)?;
+    let release = fetch_latest_release(&client, &repo).await?;
+    if !is_newer(&release.tag, version) {
+        return Ok(format!("CraftPull {version} is up to date"));
+    }
+    let os = TargetOs::current();
+    let Some(asset) = pick_asset(&release.assets, os).cloned() else {
+        return Err(tf("err.update_no_asset", &[("{tag}", &release.tag)]));
+    };
+    let dir = data_dir().join("update").join(&release.tag);
+    let (archive, checked) = download_asset(&client, &asset, &dir).await?;
+    if !checked {
+        eprintln!("Warning: GitHub gave no checksum for {}", asset.name);
+    }
+    let kind = ArchiveKind::by_name(&asset.name)
+        .ok_or_else(|| tf("err.update_archive", &[("{name}", &asset.name)]))?;
+    let exe = dir.join(if os == TargetOs::Windows {
+        EXE_WINDOWS
+    } else {
+        EXE_UNIX
+    });
+    let exe = extract_executable(&archive, kind, os, &exe)?;
+    replace_current_exe(&exe)?;
+    Ok(format!("Updated to {} ({})", release.tag, asset.name))
+}
+
 /// Проверить, есть ли новая версия программы.
 pub async fn check_for_update(state: Arc<AppState>) -> Result<(), String> {
     let cfg = state.cfg();
