@@ -202,6 +202,7 @@ The **Check** button shows a live list of what is being checked at the moment.
 | **Icons** | Repository icons are downloaded once and cached on disk; a repository without one gets the CraftPull icon |
 | **Import / Export** | The repository list, with descriptions, pins and purposes, as JSON |
 | **Purpose** | Every program has a short purpose («PDF-документы», «Монтаж видео», «Скриншоты») — shown in the grid tile and kept in the JSON |
+| **Catalog** | A ready-made catalog of **55 programs**, grouped by category: screenshots and recording, video and audio, graphics and 3D, system and network, security and offline, self-hosted servers. Programs without binary releases on GitHub are downloaded as source archives |
 | **License** | The program's own license — `MIT / Apache-2.0` — in the sidebar, with an explanation on hover |
 | **Languages** | English (default) and Russian — the **EN / RU** button in the header switches instantly |
 | **Autostart** | Optional start with Windows, hidden in the tray |
@@ -369,6 +370,7 @@ quota lets you down: fresh data is shown instantly and refreshed in the backgrou
       "enabled": true,
       "description": "An open-source PDF reader and editor written from scratch in pure Rust",
       "purpose": "PDF-документы",
+      "category": "own",
       "pinned": ["v0.21.1"],
       "filter": "Auto",
       "clone_source": false
@@ -385,6 +387,10 @@ The old value `Portable` is still accepted and behaves like `Auto`.
 `purpose`: a short line about what the program is for («PDF-документы», «Монтаж видео»,
 «Скриншоты»). It is shown in the grid tile under the name and travels with the repository
 through export and import. The field is optional — an empty value simply means "no purpose".
+
+`category`: the key of the group the program is shown in (`own`, `capture`, `media`,
+`graphics`, `system`, `security`, `server`). The group names are translated by the interface,
+so only the key is stored. The field is optional too.
 
 ---
 
