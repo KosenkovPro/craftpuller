@@ -38,7 +38,6 @@ sed -e "s/@VERSION@/$VERSION/g" -e "s/@MINMACOS@/$MIN_MACOS/g" \
 productbuild --distribution "$WORK/distribution.xml" \
     --package-path "$WORK" \
     --resources "$WORK/resources" \
-    --install-location /Applications \
     "$PKG"
 
 echo "Установщик готов: $PKG"
