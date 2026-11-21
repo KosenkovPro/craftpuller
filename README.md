@@ -78,7 +78,7 @@ description, the file filter and the pin appear right there — no second window
 
 ![Hero card](docs/screenshot-hero.png)
 
-**Settings** — download folder, speed limit, download mode, channels, behaviour and self-update.
+**Settings** — download folder, speed limit, download mode, channels, behaviour and program update.
 
 ![Settings](docs/screenshot-settings.png)
 
@@ -183,6 +183,12 @@ The **Check** button shows a live list of what is being checked at the moment.
 > descriptions and icons are stored locally, and the whole list travels as **JSON**
 > (import/export, pins included).
 
+> ### ⭐ Updates itself with one button
+> The settings have a **Program update** section: a **Check for updates** button and — when a
+> new version is out — a highlighted **Update to v0.5.0**. CraftPull downloads the release
+> file straight from GitHub, checks its SHA-256 sum, unpacks the executable, replaces the
+> current one with it and starts the program again. A check also runs at start-up.
+>
 > ### ⭐ Updates itself from source
 > CraftPull pulls its own sources with `git`, builds them with `cargo` and replaces the running
 > executable after it exits — no installer, no update server.
@@ -394,9 +400,22 @@ so only the key is stored. The field is optional too.
 
 ---
 
-## Self-update
+## Program update
 
-Point the settings at the repository with the sources (`owner/repo`) or at a local folder with
+The settings have a **Program update** section: it shows the installed version, a
+**Check for updates** button and — when a new version is out — a highlighted
+**Update to v0.5.0** button. CraftPull downloads the release file straight from GitHub,
+checks its SHA-256 sum against the one GitHub reports, unpacks the executable, replaces the
+current one with it and starts the program again. A check for a new version also runs at
+start-up — the program itself reports that an update is available.
+
+The release source is the official repository by default; it can be changed with the
+`self_update_repo` field of the settings.
+
+### Update from sources
+
+The old way is still there as a fallback: point the settings at the repository with the
+sources (`owner/repo`) or at a local folder with
 them and press **Update the program now**. CraftPull runs `git pull`, builds the project
 (`cargo build --release`), stores the new binary next to the current one and swaps it in on the
 next start.
@@ -419,6 +438,7 @@ next start.
 | `src/model.rs` | common data model: tasks, progress, releases, formatting |
 | `src/storage.rs` | version folders on disk, scanning, cleanup |
 | `src/selfupdate.rs` | self-update from sources, Windows autostart |
+| `src/updater.rs` | update from the GitHub release binaries: check, SHA-256, file replacement |
 | `src/tray.rs` | system tray icon and menu |
 | `src/icon.rs` | procedural icon, ICO/PNG, shortcut creation |
 | `src/ui/hero.rs` | hero card: custom layout, shared-element morph, card actions |

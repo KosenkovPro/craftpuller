@@ -384,7 +384,9 @@ fn replace_unix(current: &Path, new_bin: &Path) -> Result<(), String> {
     }
     set_executable(current);
     let _ = std::fs::remove_file(&old_path);
+    // Новая копия запускается с теми же аргументами, что и текущая.
     std::process::Command::new(current)
+        .args(std::env::args().skip(1))
         .spawn()
         .map_err(|e| tf("err.update_replace", &[("{e}", &e.to_string())]))?;
     Ok(())
@@ -396,13 +398,18 @@ fn replace_unix(current: &Path, new_bin: &Path) -> Result<(), String> {
 /// вспомогательный скрипт: он ждёт конца программы и запускает новую.
 #[cfg(windows)]
 fn replace_windows(current: &Path, new_bin: &Path) -> Result<(), String> {
+    use std::os::windows::process::CommandExt;
+
     let staged = with_suffix(current, ".new");
     let _ = std::fs::remove_file(&staged);
     std::fs::copy(new_bin, &staged)
         .map_err(|e| tf("err.update_replace", &[("{e}", &e.to_string())]))?;
     let script = write_helper_script(current, &staged, std::process::id())?;
+    // Скрипт ждёт конца программы — окно консоли мигать не должно.
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
     std::process::Command::new("cmd")
-        .args(["/c", "start", "", &script.to_string_lossy()])
+        .args(["/c", &script.to_string_lossy()])
+        .creation_flags(CREATE_NO_WINDOW)
         .spawn()
         .map_err(|e| tf("err.update_replace", &[("{e}", &e.to_string())]))?;
     Ok(())
