@@ -53,6 +53,23 @@ pub fn lang_name(code: u8) -> &'static str {
     }
 }
 
+/// Название категории программы по ключу (cat.*).
+///
+/// Пустая или неизвестная категория показывается как «Другое».
+pub fn category(key: &str) -> &'static str {
+    let key = if key.trim().is_empty() {
+        "other"
+    } else {
+        key.trim()
+    };
+    let name = t(&format!("cat.{key}"));
+    if name.is_empty() {
+        t("cat.other")
+    } else {
+        name
+    }
+}
+
 type Entry = (&'static str, &'static str, &'static str);
 
 static TABLE: OnceLock<HashMap<&'static str, (&'static str, &'static str)>> = OnceLock::new();
@@ -148,6 +165,15 @@ fn table() -> &'static HashMap<&'static str, (&'static str, &'static str)> {
             ("repo.no_releases", "no releases found", "релизов не найдено"),
             ("repo.checked", "checked", "проверено"),
             ("repo.group", "Author", "Автор"),
+            // --- Категории программ ---
+            ("cat.own", "Your apps", "Свои программы"),
+            ("cat.capture", "Screenshots & recording", "Скриншоты и запись экрана"),
+            ("cat.media", "Video, audio & conversion", "Видео, аудио и конвертация"),
+            ("cat.graphics", "Graphics & 3D", "Графика и 3D"),
+            ("cat.system", "System, files & network", "Система, файлы и сеть"),
+            ("cat.security", "Security, maps & offline", "Безопасность, карты и оффлайн"),
+            ("cat.server", "Self-hosted servers", "Self-hosted серверы"),
+            ("cat.other", "Other", "Другое"),
             ("repo.add", "Add repository", "Добавить репозиторий"),
             ("repo.remove", "Remove", "Убрать"),
             ("repo.import", "Import JSON", "Импорт JSON"),

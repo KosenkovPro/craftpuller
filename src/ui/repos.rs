@@ -1,8 +1,8 @@
-//! Вкладка «Репозитории»: группировка по авторам, режимы отображения, карточки.
+//! Вкладка «Репозитории»: группировка по категориям программ, режимы отображения, карточки.
 
 use super::{hero, progress, releases, theme, CraftApp};
-use crate::config::{RepoConfig, ViewMode};
-use crate::lang::{t, tf};
+use crate::config::{category_key, category_order, RepoConfig, ViewMode};
+use crate::lang::{category as category_title, t, tf};
 use crate::model::*;
 use crate::storage;
 use egui::{self, Align, Color32, Context, Layout, RichText, TextureHandle};
@@ -144,23 +144,16 @@ pub fn show(ui: &mut egui::Ui, app: &mut CraftApp, ctx: &Context) {
 
     ui.add_space(10.0);
 
-    // Группировка по авторам.
-    let mut groups: Vec<(String, Vec<RepoConfig>)> = Vec::new();
-    for rc in &cfg.repos {
-        let author = rc.author();
-        match groups.iter_mut().find(|(a, _)| *a == author) {
-            Some((_, list)) => list.push(rc.clone()),
-            None => groups.push((author, vec![rc.clone()])),
-        }
-    }
+    // Группировка по категориям программы.
+    let groups = group_by_category(&cfg.repos);
 
     egui::ScrollArea::vertical()
         .auto_shrink(false)
         .show(ui, |ui| {
             match cfg.view_mode {
                 ViewMode::List => {
-                    for (author, repos) in &groups {
-                        group_header(ui, author, repos.len());
+                    for (category, repos) in &groups {
+                        group_header(ui, category, repos.len());
                         for rc in repos {
                             repo_card(ui, app, rc, ctx);
                             ui.add_space(8.0);
@@ -172,8 +165,8 @@ pub fn show(ui: &mut egui::Ui, app: &mut CraftApp, ctx: &Context) {
                     hero::show_groups(ui, app, &groups, ctx);
                 }
                 ViewMode::Light => {
-                    for (author, repos) in &groups {
-                        group_header(ui, author, repos.len());
+                    for (category, repos) in &groups {
+                        group_header(ui, category, repos.len());
                         for rc in repos {
                             light_row(ui, app, rc);
                             ui.add_space(4.0);
@@ -186,16 +179,37 @@ pub fn show(ui: &mut egui::Ui, app: &mut CraftApp, ctx: &Context) {
         });
 }
 
-/// Заголовок группы репозиториев.
-fn group_header(ui: &mut egui::Ui, author: &str, count: usize) {
+/// Разложить репозитории по категориям программы.
+///
+/// Ключ группы — категория из настроек; репозитории без категории попадают
+/// в «Другое». Порядок групп — как в каталоге: от своих программ к прочим.
+fn group_by_category(repos: &[RepoConfig]) -> Vec<(String, Vec<RepoConfig>)> {
+    let mut groups: Vec<(String, Vec<RepoConfig>)> = Vec::new();
+    for rc in repos {
+        let key = category_key(&rc.category);
+        match groups.iter_mut().find(|(k, _)| k == key) {
+            Some((_, list)) => list.push(rc.clone()),
+            None => groups.push((key.to_string(), vec![rc.clone()])),
+        }
+    }
+    groups.sort_by_key(|(k, _)| category_order(k));
+    groups
+}
+
+/// Заголовок группы репозиториев: название категории и её размер.
+fn group_header(ui: &mut egui::Ui, category: &str, count: usize) {
     ui.horizontal(|ui| {
         ui.label(
-            RichText::new(format!("{}  {}", t("repo.group"), author))
+            RichText::new(category_title(category))
                 .size(13.0)
                 .strong()
                 .color(theme::ACCENT),
         );
-        ui.label(RichText::new(format!("{}", count)).size(11.0).color(theme::DIM));
+        ui.label(
+            RichText::new(format!("{}", count))
+                .size(11.0)
+                .color(theme::DIM),
+        );
     });
     ui.add_space(4.0);
 }

@@ -18,7 +18,7 @@ use super::anim::{lerp, lerp_rect, shift, Spring};
 use super::repos::card_icon;
 use super::{theme, CraftApp};
 use crate::config::{AssetKind, RepoConfig};
-use crate::lang::{t, tf};
+use crate::lang::{category as category_title, t, tf};
 use crate::model::{
     human_date, human_size, InstalledVersion, LogLevel, ReleaseInfo, TaskProgress, TaskState,
 };
@@ -355,6 +355,8 @@ pub fn show_groups(
     for (gi, (_, repos)) in groups.iter().enumerate() {
         let layout = &layouts[gi];
         bottom = bottom.max(tops[gi] + lerp(layout.height_collapsed, layout.height_expanded, prog));
+        // Плитка группы стоит на своём месте: со смещением самой группы.
+        let group_origin = origin + Vec2::new(0.0, tops[gi]);
         for (i, _) in repos.iter().enumerate() {
             let base = lerp_rect(layout.collapsed[i], layout.expanded[i], prog);
 
@@ -368,8 +370,8 @@ pub fn show_groups(
             };
             order += 1;
 
-            let tile_rect = layout.collapsed[i].translate(origin.to_vec2());
-            let rect = shift(base, (1.0 - appear) * 18.0).translate(origin.to_vec2());
+            let tile_rect = layout.collapsed[i].translate(group_origin.to_vec2());
+            let rect = shift(base, (1.0 - appear) * 18.0).translate(group_origin.to_vec2());
             placements.push(Placement {
                 group: gi,
                 index: i,
@@ -382,11 +384,11 @@ pub fn show_groups(
     }
 
     // Заголовки групп.
-    for (gi, (author, repos)) in groups.iter().enumerate() {
+    for (gi, (category, repos)) in groups.iter().enumerate() {
         draw_header(
             ui.painter(),
             origin + Vec2::new(0.0, tops[gi]),
-            author,
+            category,
             repos.len(),
         );
     }
@@ -438,10 +440,10 @@ pub fn show_groups(
     }
 }
 
-/// Заголовок группы: «Автор storyteller» и число репозиториев.
-fn draw_header(painter: &egui::Painter, pos: Pos2, author: &str, count: usize) {
+/// Заголовок группы: название категории программы и число репозиториев.
+fn draw_header(painter: &egui::Painter, pos: Pos2, category: &str, count: usize) {
     let font = FontId::new(13.0, FontFamily::Proportional);
-    let text = format!("{}  {}", t("repo.group"), author);
+    let text = category_title(category).to_string();
     painter.text(
         Pos2::new(pos.x, pos.y + 14.0),
         Align2::LEFT_CENTER,
@@ -641,8 +643,9 @@ fn draw_card(
 
         // Назначение программы — короткой строкой под названием и версией.
         if !data.purpose.is_empty() {
-            let purpose_font = FontId::new(11.0, FontFamily::Proportional);
-            let max_w = (tile_origin.width() - 20.0).max(40.0);
+            let max_w = (tile_origin.width() - 12.0).max(40.0);
+            // Назначение должно помещаться целиком: уменьшаем кегль, а не режем.
+            let purpose_font = fit_font(&painter, &data.purpose, max_w, 11.0);
             let text = elide(&painter, &data.purpose, &purpose_font, max_w);
             painter.text(
                 Pos2::new(tile_origin.center().x, tile_origin.top() + 120.0),
@@ -1304,6 +1307,21 @@ fn corner(radius: f32) -> egui::CornerRadius {
 fn text_width(painter: &egui::Painter, text: &str, font: &FontId) -> f32 {
     painter
         .fonts(|f| text.chars().map(|c| f.glyph_width(font, c)).sum::<f32>())
+}
+
+/// Подобрать кегль так, чтобы строка поместилась целиком.
+///
+/// Назначение программы не должно обрезаться многоточием, поэтому размер
+/// шрифта уменьшается в пределах разумного.
+fn fit_font(painter: &egui::Painter, text: &str, max_w: f32, base: f32) -> FontId {
+    let mut size = base;
+    loop {
+        let font = FontId::new(size, FontFamily::Proportional);
+        if size <= 8.0 || text_width(painter, text, &font) <= max_w {
+            return font;
+        }
+        size -= 0.5;
+    }
 }
 
 /// Две первые буквы названия — заглушка вместо иконки.
