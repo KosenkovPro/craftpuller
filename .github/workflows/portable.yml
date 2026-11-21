@@ -103,20 +103,27 @@ jobs:
             | Platform | Package |
             |---|---|
             | Windows x64 | `craftpull-*-windows-x64.zip` — portable, no installer |
-            | macOS (Intel + Apple Silicon) | `craftpull-*-macos-universal.zip` — `CraftPull.app` |
+            | macOS (Apple Silicon) | `craftpull-*-macos-arm64.zip` — `CraftPull.app` |
+            | macOS (Intel) | `craftpull-*-macos-x64.zip` — `CraftPull.app` |
+            | macOS (both) | `craftpull-*-macos-universal.zip` — `CraftPull.app` |
             | macOS, disk image | `craftpull-*-macos-universal.dmg` — drag the app into «Applications» |
             | macOS, installer | `craftpull-*-macos-universal.pkg` — step-by-step installation |
+            | macOS, archive | `craftpull-*-macos-universal.tar.gz` |
             | Ubuntu / Debian x86_64 | `craftpull-*-linux-x86_64.deb` — `sudo apt install ./craftpull-*.deb` |
             | Linux x86_64 | `craftpull-*-linux-x86_64.tar.gz` — with `install.sh` and a `.desktop` entry |
 
             The Windows archive contains the executable, the icon and the README: unpack it and
-            run `craftpull.exe`. The macOS archive contains `CraftPull.app` — unpack it and drag
+            run `craftpull.exe`. The macOS archives contain `CraftPull.app` — unpack it and drag
             the app into «Applications», or run it directly from the folder. The `.dmg` shows the
             usual window with the app and the «Applications» shortcut. The `.pkg` is a regular
-            installer: it puts the app into `/Applications`. The `.deb` package installs the binary
+            step-by-step installer: it greets you, shows the license, lets you choose the folder
+            and puts the app into `/Applications`. The `.deb` package installs the binary
             into `/usr/bin`, the icon into `/usr/share/icons` and the desktop entry into
             `/usr/share/applications`. The tar.gz archive unpacks to `install.sh`, which puts the
             binary into `~/.local/bin` and registers the desktop entry and the icon.
+
+            The macOS builds are not signed, so the system may report that the application is not
+            verified: open it with the right mouse button and choose «Open».
 
             The program updates itself: the settings have an update section that checks for a
             new version, downloads it, verifies the SHA-256 sum and replaces the program file.
