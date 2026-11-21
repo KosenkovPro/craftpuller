@@ -29,6 +29,14 @@ pkgbuild --root "$WORK/root" \
     --version "$VERSION" \
     "$WORK/$ID.pkg"
 
+# Проверяем, что в компонентном пакете действительно есть приложение.
+if pkgutil --payload-files "$WORK/$ID.pkg" > "$WORK/payload.txt" 2>/dev/null; then
+    if ! grep -q 'CraftPull\.app' "$WORK/payload.txt"; then
+        echo "Ошибка: в компонентном пакете нет CraftPull.app" >&2
+        exit 1
+    fi
+fi
+
 # Описание установщика: окно приветствия, лицензия, выбор папки.
 mkdir -p "$WORK/resources"
 cp "$RES/welcome.html" "$RES/license.html" "$WORK/resources/"
@@ -40,4 +48,14 @@ productbuild --distribution "$WORK/distribution.xml" \
     --resources "$WORK/resources" \
     "$PKG"
 
-echo "Установщик готов: $PKG"
+# productbuild умеет молча собрать пустую оболочку, если не нашёл компонентный
+# пакет по имени из pkg-ref. Настоящий установщик не меньше компонента.
+COMP_SIZE="$(stat -f%z "$WORK/$ID.pkg")"
+PKG_SIZE="$(stat -f%z "$PKG")"
+if [ "$PKG_SIZE" -lt 1000000 ] || [ "$PKG_SIZE" -lt "$((COMP_SIZE / 2))" ]; then
+    echo "Ошибка: установщик ($PKG_SIZE байт) слишком мал для компонента" \
+         "($COMP_SIZE байт) — приложение не попало в установщик" >&2
+    exit 1
+fi
+
+echo "Установщик готов: $PKG ($PKG_SIZE байт)"

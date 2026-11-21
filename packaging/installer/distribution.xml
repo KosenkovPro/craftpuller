@@ -1,6 +1,12 @@
 <?xml version="1.0" encoding="utf-8" standalone="no"?>
 <!-- Описание установщика для productbuild. Подстановки @VERSION@ и @MINMACOS@
-     заменяются скриптом make-pkg.sh перед сборкой. -->
+     заменяются скриптом make-pkg.sh перед сборкой.
+
+     ВАЖНО: текст элемента pkg-ref — это ИМЯ ФАЙЛА компонентного пакета
+     относительно каталога поиска, который productbuild получает отдельной
+     опцией, а атрибут id — идентификатор пакета. Если текст не совпадает
+     с именем файла, productbuild лишь пишет предупреждение и собирает
+     пустой установщик без приложения. -->
 <installer-gui-script minSpecVersion="1">
     <title>Install CraftPull</title>
     <organization>io.github.kosenkovpro</organization>
@@ -11,12 +17,12 @@
     <os-version min="@MINMACOS@"/>
     <choices-outline>
         <line choice="default">
-            <line choice="io.github.kosenkovpro.craftpull.pkg"/>
+            <line choice="io.github.kosenkovpro.craftpull"/>
         </line>
     </choices-outline>
     <choice id="default"/>
-    <choice id="io.github.kosenkovpro.craftpull.pkg" visible="false">
-        <pkg-ref id="io.github.kosenkovpro.craftpull.pkg"/>
+    <choice id="io.github.kosenkovpro.craftpull" visible="false">
+        <pkg-ref id="io.github.kosenkovpro.craftpull"/>
     </choice>
-    <pkg-ref id="io.github.kosenkovpro.craftpull.pkg" version="@VERSION@" onConclusion="none">CraftPull</pkg-ref>
+    <pkg-ref id="io.github.kosenkovpro.craftpull" version="@VERSION@" onConclusion="none">io.github.kosenkovpro.craftpull.pkg</pkg-ref>
 </installer-gui-script>
