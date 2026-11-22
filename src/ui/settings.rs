@@ -439,7 +439,7 @@ pub fn show(ui: &mut egui::Ui, app: &mut CraftApp) {
                                                         format!(
                                                             "{} · {}",
                                                             k.localized_label(),
-                                                            crate::model::human_size(a.size)
+                                                            crate::model::human_size_or_dash(a.size)
                                                         ),
                                                     )
                                                 })
@@ -611,3 +611,4 @@ pub fn show(ui: &mut egui::Ui, app: &mut CraftApp) {
         app.notify(t("repo.export_ok").replace("{p}", "—"), LogLevel::Ok);
     }
 }
+

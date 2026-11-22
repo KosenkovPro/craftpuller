@@ -273,9 +273,20 @@ fn repo_card(ui: &mut egui::Ui, app: &mut CraftApp, rc: &RepoConfig, ctx: &Conte
                         );
                     }
                 });
-                ui.label(
-                    RichText::new(&rc.slug).size(11.0).color(theme::DIM),
-                );
+                ui.horizontal(|ui| {
+                    ui.label(
+                        RichText::new(&rc.slug).size(11.0).color(theme::DIM),
+                    );
+                    // Не-GitHub источник: показываем, откуда берутся сборки.
+                    if let Some(src) = &rc.source {
+                        ui.label(
+                            RichText::new(src.label())
+                                .size(11.0)
+                                .color(theme::DIM)
+                                .weak(),
+                        );
+                    }
+                });
                 let desc = if rc.description.trim().is_empty() {
                     t("repo.desc_missing").to_string()
                 } else {
@@ -646,12 +657,26 @@ fn initials(name: &str) -> String {
 }
 
 /// Добавить свой репозиторий.
+///
+/// Принимает `owner/repo` для GitHub или полную ссылку на проект —
+/// тогда CraftPull сам определит, где искать релизы.
 fn add_repo(app: &mut CraftApp) {
-    let slug = app.new_repo.trim().to_string();
-    if slug.is_empty() || !slug.contains('/') {
+    let raw = app.new_repo.trim().to_string();
+    if raw.is_empty() {
         app.notify(t("repo.add_err"), LogLevel::Warn);
         return;
     }
+    // Ссылка на проект: хост и путь определяем сами.
+    let (slug, source) = match crate::sources::SourceSpec::detect(&raw) {
+        Some((slug, source)) => (slug, source),
+        None => {
+            if !raw.contains('/') {
+                app.notify(t("repo.add_err"), LogLevel::Warn);
+                return;
+            }
+            (raw.clone(), None)
+        }
+    };
     let mut cfg = app.state.cfg();
     if cfg.repo(&slug).is_some() {
         app.notify(
@@ -662,6 +687,9 @@ fn add_repo(app: &mut CraftApp) {
     }
     let mut rc = crate::config::RepoConfig::new(&slug);
     rc.enabled = true;
+    if let Some(src) = source {
+        rc.source = Some(src);
+    }
     cfg.repos.push(rc);
     app.state.save_cfg(cfg);
     app.new_repo.clear();

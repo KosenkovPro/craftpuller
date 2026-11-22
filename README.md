@@ -33,9 +33,13 @@ It is a **native Rust application** built with **egui/eframe**: no Electron, no 
 no web engine. It runs in the system tray, and it keeps working even when the anonymous GitHub
 API quota is exhausted.
 
+GitHub does not have to be the source: CraftPull also understands **GitLab**, **Forgejo/Gitea**
+and plain **release catalogs** — that is how VLC, GIMP and Blender made it into the catalog,
+even though none of them publishes binary releases on GitHub.
+
 **Keywords:** `github release manager`, `github downloader`, `release asset downloader`,
 `auto update tool`, `rust desktop app`, `egui`, `windows`, `ubuntu`, `linux`,
-`sha256`, `version manager`.
+`sha256`, `version manager`, `vlc`, `gimp`, `blender`, `gitlab`.
 
 ## Screenshots
 
@@ -178,6 +182,23 @@ The **Check** button shows a live list of what is being checked at the moment.
 > office or mobile address that runs out in minutes. When the API refuses, CraftPull silently
 > falls back to the public release pages and keeps working, including SHA-256 checksums.
 
+> ### ⭐ Not just GitHub: VLC, GIMP and Blender
+> The best programs often have no binary releases on GitHub: VLC lives on
+> `code.videolan.org`, GIMP on `gitlab.gnome.org`, Blender on
+> `projects.blender.org`, and their repositories publish sources only. So CraftPull
+> understands three sources besides GitHub:
+>
+> * **GitLab** — the release list of a project with its attached files;
+> * **Forgejo / Gitea** — the same for projects on their own hosting;
+> * **a release catalog** — an ordinary page listing the files: versions and builds are
+>   taken straight from it, and the SHA-256 sums from the file next to them.
+>
+> Your own project is added by link — CraftPull works out where to look by itself:
+> `https://gitlab.gnome.org/GNOME/gimp` or `https://codeberg.org/owner/repo`.
+> **VLC**, **GIMP** and **Blender** are now in the catalog, with every file for Windows,
+> macOS and Linux and with checksum verification.
+> The `craftpull --check-sources` command shows what the program sees at each source.
+
 > ### ⭐ Organised by author
 > Repositories are grouped by owner, your own repositories can be added at any time,
 > descriptions and icons are stored locally, and the whole list travels as **JSON**
@@ -185,7 +206,7 @@ The **Check** button shows a live list of what is being checked at the moment.
 
 > ### ⭐ Updates itself with one button
 > The settings have a **Program update** section: a **Check for updates** button and — when a
-> new version is out — a highlighted **Update to v0.5.3**. CraftPull downloads the release
+> new version is out — a highlighted **Update to v0.5.4**. CraftPull downloads the release
 > file straight from GitHub, checks its SHA-256 sum, unpacks the executable, replaces the
 > current one with it and starts the program again. A check also runs at start-up.
 >
@@ -208,7 +229,7 @@ The **Check** button shows a live list of what is being checked at the moment.
 | **Icons** | Repository icons are downloaded once and cached on disk; a repository without one gets the CraftPull icon |
 | **Import / Export** | The repository list, with descriptions, pins and purposes, as JSON |
 | **Purpose** | Every program has a short purpose («PDF-документы», «Монтаж видео», «Скриншоты») — shown in the grid tile and kept in the JSON |
-| **Catalog** | A ready-made catalog of **55 programs**, grouped by category: screenshots and recording, video and audio, graphics and 3D, system and network, security and offline, self-hosted servers. Programs without binary releases on GitHub are downloaded as source archives |
+| **Catalog** | A ready-made catalog of **59 programs**, grouped by category: screenshots and recording, video and audio, graphics and 3D, system and network, security and offline, self-hosted servers. VLC, GIMP and Blender are fetched from their own download pages, the rest from GitHub |
 | **License** | The program's own license — `MIT / Apache-2.0` — in the sidebar, with an explanation on hover |
 | **Languages** | English (default) and Russian — the **EN / RU** button in the header switches instantly |
 | **Autostart** | Optional start with Windows, hidden in the tray |
@@ -342,6 +363,7 @@ and the **EN / RU** button on the right switches the language of the interface i
 | `craftpull --install-shortcut` | create a desktop shortcut |
 | `craftpull --export-icon <file.png>` | save the 256×256 icon as PNG |
 | `craftpull --selftest [owner/repo]` | end-to-end check: query GitHub and download a release, no window |
+| `craftpull --check-sources [link]` | check the release sources: catalogs, GitLab, Forgejo |
 | `craftpull --update` | check for a new version of the program and install it, no window |
 | `craftpull --tab <repos\|settings\|logs>` | open a specific tab |
 | `craftpull --view <grid\|list\|light>` | open a specific view mode |
@@ -414,7 +436,7 @@ so only the key is stored. The field is optional too.
 
 The settings have a **Program update** section: it shows the installed version, a
 **Check for updates** button and — when a new version is out — a highlighted
-**Update to v0.5.3** button. CraftPull downloads the release file straight from GitHub,
+**Update to v0.5.4** button. CraftPull downloads the release file straight from GitHub,
 checks its SHA-256 sum against the one GitHub reports, unpacks the executable, replaces the
 current one with it and starts the program again. A check for a new version also runs at
 start-up — the program itself reports that an update is available.
@@ -476,3 +498,4 @@ MIT **or** Apache-2.0 — your choice. See [LICENSE](LICENSE).
   &nbsp;·&nbsp;
   <a href="README.ru.md"><b>🇷🇺 Русский</b></a>
 </p>
+

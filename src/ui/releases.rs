@@ -424,7 +424,7 @@ fn file_row(
         let label_font = egui::FontId::new(11.5, egui::FontFamily::Proportional);
         let name_font = egui::FontId::new(10.5, egui::FontFamily::Proportional);
         let size_font = egui::FontId::new(10.5, egui::FontFamily::Proportional);
-        let size_text = human_size(asset.size);
+        let size_text = crate::model::human_size_or_dash(asset.size);
 
         // Имя файла сокращаем: иначе оно наезжает на размер.
         let fixed = progress::text_w(ui, &badge_font, badge)
@@ -480,7 +480,7 @@ pub fn asset_combo(
         for (k, a) in crate::manager::asset_options(slug, rel) {
             kinds.push((
                 k,
-                format!("{} · {}", k.localized_label(), human_size(a.size)),
+                format!("{} · {}", k.localized_label(), crate::model::human_size_or_dash(a.size)),
             ));
         }
     }
@@ -517,3 +517,5 @@ pub fn asset_combo(
         None
     }
 }
+
+

@@ -407,7 +407,17 @@ impl AppState {
         rt.checking = true;
         self.shared.set_repo_runtime(rt.clone());
 
-        let result = match github::list_releases(&self.shared.client, slug).await {
+        // Источник релизов: у обычных репозиториев это GitHub, у части —
+        // свои страницы загрузок (VLC, GIMP, Blender).
+        let source = self
+            .shared
+            .cfg
+            .lock()
+            .ok()
+            .and_then(|c| c.repo(slug).and_then(|r| r.source.clone()));
+        let result = match crate::sources::list_releases(&self.shared.client, slug, source.as_ref())
+            .await
+        {
             Ok(mut releases) => {
                 releases.sort_by(|a, b| {
                     b.published_at
@@ -1069,7 +1079,12 @@ pub fn asset_kind(name: &str) -> Option<AssetKind> {
     {
         return None;
     }
-    if n.contains("windows") || n.ends_with(".msi") || n.contains("setup.exe") {
+    if n.contains("windows")
+        || n.ends_with(".msi")
+        || n.contains("setup.exe")
+        || n.contains("win64")
+        || n.contains("win32")
+    {
         if n.ends_with(".msi") {
             return Some(AssetKind::WindowsMsi);
         }
@@ -1080,6 +1095,23 @@ pub fn asset_kind(name: &str) -> Option<AssetKind> {
             return Some(AssetKind::WindowsPortable);
         }
         return Some(AssetKind::WindowsSetup);
+    }
+    // macOS: образ диска или архив с приложением. Расширение .dmg и .pkg
+    // само по себе говорит о системе — в имени файла маркер не нужен.
+    if n.ends_with(".dmg")
+        || n.ends_with(".pkg")
+        || n.contains("macos")
+        || n.contains("macosx")
+        || n.contains("osx")
+        || n.contains("darwin")
+    {
+        if n.ends_with(".dmg") {
+            return Some(AssetKind::MacOsDmg);
+        }
+        if n.ends_with(".zip") {
+            return Some(AssetKind::MacOsZip);
+        }
+        return None;
     }
     if n.contains("linux") || n.contains("ubuntu") {
         if n.ends_with(".appimage") {
@@ -1112,6 +1144,12 @@ pub fn main_product_prefix(slug: &str, tag: &str) -> String {
 /// Файл релиза по виду: сначала основной продукт, потом любой подходящий.
 fn pick_asset(slug: &str, rel: &ReleaseInfo, kind: AssetKind) -> Vec<AssetInfo> {
     let main = main_product_prefix(slug, &rel.tag);
+    // Сборка «на любую систему» — она работает везде, её и берём.
+    for a in &rel.assets {
+        if asset_kind(&a.name) == Some(kind) && is_universal_asset(&a.name) {
+            return vec![a.clone()];
+        }
+    }
     for a in &rel.assets {
         if asset_kind(&a.name) == Some(kind) && a.name.starts_with(&main) {
             return vec![a.clone()];
@@ -1125,15 +1163,32 @@ fn pick_asset(slug: &str, rel: &ReleaseInfo, kind: AssetKind) -> Vec<AssetInfo> 
     Vec::new()
 }
 
+/// Сборка, подходящая любой системе: universal, anycpu.
+fn is_universal_asset(name: &str) -> bool {
+    let n = name.to_ascii_lowercase();
+    n.contains("universal") || n.contains("anycpu") || n.contains("-all")
+}
+
 /// Выбрать файлы релиза по правилу фильтра.
 pub fn select_assets(slug: &str, kind: AssetKind, rel: &ReleaseInfo) -> Vec<AssetInfo> {
     match kind {
         AssetKind::All => rel.assets.clone(),
-        AssetKind::Source => vec![AssetInfo::source_zip(&rel.tag, rel.source_zip.clone())],
+        // Архива исходников у некоторых источников нет — тогда и варианта нет.
+        AssetKind::Source => {
+            if rel.source_zip.trim().is_empty() {
+                Vec::new()
+            } else {
+                vec![AssetInfo::source_zip(&rel.tag, rel.source_zip.clone())]
+            }
+        }
         AssetKind::Auto => {
             let k = os_default_kind(slug, rel);
             if k == AssetKind::Source {
-                vec![AssetInfo::source_zip(&rel.tag, rel.source_zip.clone())]
+                if rel.source_zip.trim().is_empty() {
+                    Vec::new()
+                } else {
+                    vec![AssetInfo::source_zip(&rel.tag, rel.source_zip.clone())]
+                }
             } else {
                 pick_asset(slug, rel, k)
             }
@@ -1197,6 +1252,12 @@ pub fn os_default_kind(slug: &str, rel: &ReleaseInfo) -> AssetKind {
     for k in AssetKind::for_current_os() {
         if rel.assets.iter().any(|a| asset_kind(&a.name) == Some(*k)) {
             return *k;
+        }
+    }
+    // Под текущую ОС ничего нет — отдаём любой подходящий файл.
+    for a in &rel.assets {
+        if let Some(k) = asset_kind(&a.name) {
+            return k;
         }
     }
     AssetKind::Source

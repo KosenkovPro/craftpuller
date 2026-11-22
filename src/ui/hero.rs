@@ -481,7 +481,7 @@ fn collect_data(app: &mut CraftApp, rc: &RepoConfig, ctx: &Context) -> CardData 
                 .map(|(k, a)| {
                     (
                         k,
-                        format!("{} · {}", k.localized_label(), human_size(a.size)),
+                        format!("{} · {}", k.localized_label(), crate::model::human_size_or_dash(a.size)),
                     )
                 })
                 .collect::<Vec<_>>()
@@ -1332,3 +1332,4 @@ fn initials(name: &str) -> String {
         .collect::<String>()
         .to_uppercase()
 }
+

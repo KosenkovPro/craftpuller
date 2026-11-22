@@ -19,6 +19,7 @@ mod lang;
 mod manager;
 mod model;
 mod selfupdate;
+mod sources;
 mod storage;
 mod tray;
 mod ui;
@@ -171,8 +172,63 @@ fn run(args: &[String]) -> Result<(), String> {
         return Ok(());
     }
 
-    let hidden = args.iter().any(|a| a == "--tray") || state.cfg().start_minimized;
+    // Проверка источников: что видно у каждого не-GitHub источника.
+    if let Some(pos) = args.iter().position(|a| a == "--check-sources") {
+        attach_console();
+        println!("CraftPull: checking release sources…");
+        let given = args.get(pos + 1).cloned();
+        rt.block_on(async {
+            // Проверяем либо указанный проект, либо все источники из каталога.
+            let mut checks: Vec<(String, Option<crate::sources::SourceSpec>)> = Vec::new();
+            match given {
+                Some(a) => {
+                    let (slug, src) =
+                        crate::sources::SourceSpec::detect(&a).unwrap_or((a.clone(), None));
+                    checks.push((slug, src));
+                }
+                None => {
+                    for slug in crate::config::DEFAULT_REPOS {
+                        if let Some(src) = crate::config::default_source(slug) {
+                            checks.push((slug.to_string(), Some(src)));
+                        }
+                    }
+                }
+            }
+            for (slug, source) in checks {
+                let label = source
+                    .as_ref()
+                    .map(|s| s.label().to_string())
+                    .unwrap_or_else(|| "GitHub".to_string());
+                println!("\n=== {slug} — {label} ===");
+                match crate::sources::list_releases(&state.shared.client, &slug, source.as_ref())
+                    .await
+                {
+                    Ok(releases) => {
+                        println!("  releases: {}", releases.len());
+                        for r in releases.iter().take(3) {
+                            println!(
+                                "  {} ({})",
+                                r.tag,
+                                r.published_at.clone().unwrap_or_else(|| "—".into())
+                            );
+                            for a in &r.assets {
+                                println!(
+                                    "      {:<46} {:>10}  {}",
+                                    a.name,
+                                    model::human_size(a.size),
+                                    a.digest.as_deref().unwrap_or("без суммы")
+                                );
+                            }
+                        }
+                    }
+                    Err(e) => println!("  ОШИБКА: {e}"),
+                }
+            }
+        });
+        return Ok(());
+    }
 
+    let hidden = args.iter().any(|a| a == "--tray") || state.cfg().start_minimized;
     // Открыть сразу нужную вкладку / режим / окно релизов.
     let tab_arg = arg_value(args, "--tab");
     let view_arg = arg_value(args, "--view");
@@ -244,6 +300,7 @@ fn print_help() {
          craftpull --install-shortcut — create a desktop shortcut\n  \
          craftpull --export-icon <file.png> — save the 256×256 icon\n  \
          craftpull --selftest [owner/repo] — check the download pipeline without a window\n  \
+         craftpull --check-sources — check every non-GitHub release source\n  \
          craftpull --update          — check for a new version of the program and install it\n  \
          craftpull --tab <repos|settings|logs> — open a specific tab\n  \
          craftpull --view <grid|list|light> — open a specific view mode\n  \

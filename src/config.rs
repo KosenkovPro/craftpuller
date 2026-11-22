@@ -36,15 +36,19 @@ pub const DEFAULT_REPOS: &[&str] = &[
     "HandBrake/HandBrake",
     "audacity/audacity",
     "mpv-player/mpv",
+    "videolan/vlc",
     "jeffvli/feishin",
     "SV-stark/FileConverter-rs",
     // Графика и 3D.
     "d2phap/ImageGlass",
     "darktable-org/darktable",
+    "GNOME/gimp",
+    "blender/blender",
     "FreeCAD/FreeCAD",
     // Система, файлы и сеть.
     "microsoft/PowerToys",
     "dundee/gdu",
+    "winscp/winscp",
     "iterate-ch/cyberduck",
     "qbittorrent/qBittorrent",
     "pbatard/rufus",
@@ -104,15 +108,19 @@ pub const DEFAULT_PURPOSES: &[(&str, &str)] = &[
     ("HandBrake/HandBrake", "Сжатие видео"),
     ("audacity/audacity", "Запись и монтаж звука"),
     ("mpv-player/mpv", "Всеядный медиаплеер"),
+    ("videolan/vlc", "Всеядный медиаплеер"),
     ("jeffvli/feishin", "Плеер для сервера"),
     ("SV-stark/FileConverter-rs", "Конвертер файлов"),
     // Графика и 3D.
     ("d2phap/ImageGlass", "Просмотрщик фото"),
     ("darktable-org/darktable", "Растровый фоторедактор"),
+    ("GNOME/gimp", "Растровый редактор"),
+    ("blender/blender", "3D-моделирование и рендеринг"),
     ("FreeCAD/FreeCAD", "3D-моделирование и CAD"),
     // Система, файлы и сеть.
     ("microsoft/PowerToys", "Утилиты Windows"),
     ("dundee/gdu", "Анализ занятого места"),
+    ("winscp/winscp", "FTP / SFTP клиент"),
     ("iterate-ch/cyberduck", "FTP / SFTP клиент"),
     ("qbittorrent/qBittorrent", "Торрент-клиент"),
     ("pbatard/rufus", "Запись флешек USB"),
@@ -183,15 +191,19 @@ pub const DEFAULT_CATEGORIES: &[(&str, &str)] = &[
     ("HandBrake/HandBrake", "media"),
     ("audacity/audacity", "media"),
     ("mpv-player/mpv", "media"),
+    ("videolan/vlc", "media"),
     ("jeffvli/feishin", "media"),
     ("SV-stark/FileConverter-rs", "media"),
     // Графика и 3D.
     ("d2phap/ImageGlass", "graphics"),
     ("darktable-org/darktable", "graphics"),
+    ("GNOME/gimp", "graphics"),
+    ("blender/blender", "graphics"),
     ("FreeCAD/FreeCAD", "graphics"),
     // Система, файлы и сеть.
     ("microsoft/PowerToys", "system"),
     ("dundee/gdu", "system"),
+    ("winscp/winscp", "system"),
     ("iterate-ch/cyberduck", "system"),
     ("qbittorrent/qBittorrent", "system"),
     ("pbatard/rufus", "system"),
@@ -225,6 +237,20 @@ pub fn default_category(slug: &str) -> &'static str {
         .find(|(s, _)| *s == slug)
         .map(|(_, c)| *c)
         .unwrap_or("")
+}
+
+/// Источник по умолчанию для репозитория.
+///
+/// У GitHub-проектов источник пустой — это обычный GitHub. У остальных
+/// он указывает, откуда на самом деле приходят сборки.
+pub fn default_source(slug: &str) -> Option<crate::sources::SourceSpec> {
+    use crate::sources::SourceSpec;
+    Some(match slug {
+        "videolan/vlc" => SourceSpec::vlc(),
+        "GNOME/gimp" => SourceSpec::gimp(),
+        "blender/blender" => SourceSpec::blender(),
+        _ => return None,
+    })
 }
 
 /// Порядок категорий в каталоге: от своих программ к «другим».
@@ -274,6 +300,10 @@ pub enum AssetKind {
     LinuxDeb,
     /// Ubuntu: rpm.
     LinuxRpm,
+    /// macOS: образ диска .dmg.
+    MacOsDmg,
+    /// macOS: архив .zip с приложением.
+    MacOsZip,
     /// Только архив с исходниками.
     Source,
     /// Все файлы релиза.
@@ -292,6 +322,8 @@ impl AssetKind {
             AssetKind::LinuxTarGz => crate::lang::t("filter.linux_targz"),
             AssetKind::LinuxDeb => crate::lang::t("filter.linux_deb"),
             AssetKind::LinuxRpm => crate::lang::t("filter.linux_rpm"),
+            AssetKind::MacOsDmg => crate::lang::t("filter.macos_dmg"),
+            AssetKind::MacOsZip => crate::lang::t("filter.macos_zip"),
             AssetKind::Source => crate::lang::t("filter.source"),
             AssetKind::All => crate::lang::t("filter.all"),
         }
@@ -303,6 +335,7 @@ impl AssetKind {
             AssetKind::WindowsPortable | AssetKind::WindowsMsi | AssetKind::WindowsSetup => "WIN",
             AssetKind::LinuxAppImage | AssetKind::LinuxTarGz | AssetKind::LinuxDeb
             | AssetKind::LinuxRpm => "LNX",
+            AssetKind::MacOsDmg | AssetKind::MacOsZip => "MAC",
             AssetKind::Source => "SRC",
             _ => "···",
         }
@@ -317,7 +350,7 @@ impl AssetKind {
                 AssetKind::WindowsSetup,
             ]
         } else if cfg!(target_os = "macos") {
-            &[]
+            &[AssetKind::MacOsDmg, AssetKind::MacOsZip]
         } else {
             &[
                 AssetKind::LinuxAppImage,
@@ -400,6 +433,12 @@ pub struct RepoConfig {
     pub category: String,
     /// Локальный путь к сохранённой иконке репозитория.
     pub icon: Option<String>,
+    /// Откуда брать релизы. Пусто — обычный GitHub.
+    ///
+    /// Нужен для проектов, которые живут не на GitHub: VLC, GIMP и Blender
+    /// раздают сборки со своих страниц загрузок, а не как релизы.
+    #[serde(default)]
+    pub source: Option<crate::sources::SourceSpec>,
 }
 
 impl RepoConfig {
@@ -414,6 +453,7 @@ impl RepoConfig {
             purpose: default_purpose(slug).to_string(),
             category: default_category(slug).to_string(),
             icon: None,
+            source: default_source(slug),
         }
     }
 
@@ -497,7 +537,15 @@ fn default_root_dir() -> PathBuf {
 }
 
 /// Путь к файлу конфигурации.
+///
+/// Переменная окружения CRAFTPULL_CONFIG_DIR переносит настройки в другую
+/// папку — так проверки не трогают рабочие настройки.
 pub fn config_path() -> PathBuf {
+    if let Ok(dir) = std::env::var("CRAFTPULL_CONFIG_DIR") {
+        if !dir.trim().is_empty() {
+            return PathBuf::from(dir).join("config.json");
+        }
+    }
     let dir = dirs::config_dir()
         .unwrap_or_else(|| PathBuf::from("."))
         .join("CraftPull");
@@ -505,7 +553,14 @@ pub fn config_path() -> PathBuf {
 }
 
 /// Папка с данными приложения (логи, иконки, исходники для самообновления).
+///
+/// Переменная окружения CRAFTPULL_DATA_DIR переносит её в другую папку.
 pub fn data_dir() -> PathBuf {
+    if let Ok(dir) = std::env::var("CRAFTPULL_DATA_DIR") {
+        if !dir.trim().is_empty() {
+            return PathBuf::from(dir).join("CraftPull");
+        }
+    }
     let dir = dirs::data_local_dir()
         .or_else(dirs::data_dir)
         .unwrap_or_else(|| PathBuf::from("."))
@@ -560,6 +615,11 @@ impl Config {
             // Категория — тоже: старый конфиг получает её из таблицы.
             if repo.category.trim().is_empty() {
                 repo.category = default_category(&repo.slug).to_string();
+            }
+            // Источник: VLC, GIMP и Blender берут сборки со своих страниц
+            // загрузок, а не с GitHub.
+            if repo.source.is_none() {
+                repo.source = default_source(&repo.slug);
             }
         }
         if self.max_parallel == 0 {
@@ -638,6 +698,7 @@ impl Config {
                         purpose: entry.purpose.clone(),
                         category: entry.category.clone(),
                         icon: None,
+                        source: default_source(&slug),
                     });
                     added += 1;
                 }

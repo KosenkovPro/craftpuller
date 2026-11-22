@@ -208,8 +208,7 @@ pub fn human_date(raw: &str) -> String {
 }
 
 /// Форматирование размера для интерфейса.
-pub fn human_size(bytes: u64) -> String {
-    const KB: f64 = 1024.0;
+pub fn human_size(bytes: u64) -> String {    const KB: f64 = 1024.0;
     const MB: f64 = KB * 1024.0;
     const GB: f64 = MB * 1024.0;
     let b = bytes as f64;
@@ -221,6 +220,17 @@ pub fn human_size(bytes: u64) -> String {
         crate::lang::tf("unit.kb", &[("{v}", &format!("{:.0}", b / KB))])
     } else {
         crate::lang::tf("unit.b", &[("{v}", &b.to_string())])
+    }
+}
+
+/// Размер файла, а если размер неизвестен — прочерк.
+///
+/// Не у всех источников (GitLab, например) размер файла известен.
+pub fn human_size_or_dash(bytes: u64) -> String {
+    if bytes == 0 {
+        "—".to_string()
+    } else {
+        human_size(bytes)
     }
 }
 
